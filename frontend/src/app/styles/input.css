@@ -1,0 +1,217 @@
+.input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 640px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.input-bar__wrapper {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  background: var(--bg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  transition: var(--transition);
+  min-height: 44px;
+}
+
+.input-bar__wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.input-bar__textarea {
+  flex: 1;
+  font-size: 15px;
+  line-height: 1.5;
+  max-height: 100px;
+  min-height: 24px;
+  color: var(--text);
+  background: transparent;
+}
+
+.input-bar__textarea::placeholder {
+  color: var(--text-dim);
+}
+
+/* 右侧操作按钮 - 统一容器 */
+.input-bar__action-button,
+.input-bar__action-button--mic,
+.input-bar__action-button--recording,
+.input-bar__action-button--interrupt,
+.input-bar__action-button--thinking,
+.input-bar__action-button--speaking,
+.input-bar__action-button.send {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+  margin-left: 8px;
+  cursor: pointer;
+  border: none;
+}
+
+/* 发送按钮 */
+.input-bar__action-button.send {
+  background: var(--accent);
+  color: white;
+}
+
+.input-bar__action-button.send:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.input-bar__action-button.send:active {
+  transform: scale(0.95);
+}
+
+.input-bar__action-button.send svg {
+  transform: translateX(1px);
+}
+
+/* 麦克风按钮 - ready 状态 */
+.input-bar__action-button--mic {
+  background: #e8f4ff;
+  color: #1677ff;
+}
+
+.input-bar__action-button--mic:hover {
+  background: #d6e8ff;
+  transform: scale(1.05);
+}
+
+.input-bar__action-button--mic:active {
+  transform: scale(0.95);
+}
+
+/* 麦克风按钮 - recording/listening 状态 */
+.input-bar__action-button--recording {
+  background: #1677ff;
+  color: white;
+  animation: breathing-scale 2s ease-in-out infinite;
+  position: relative;
+}
+
+.input-bar__action-button--recording::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 119, 255, 0.4) 0%, rgba(22, 119, 255, 0) 70%);
+  animation: breathing-glow 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+.input-bar__action-button--recording:hover {
+  background: #4096ff;
+}
+
+/* 打断按钮 - stop 状态（与 listening 相同样式） */
+.input-bar__action-button--interrupt {
+  background: #1677ff;
+  color: white;
+  animation: breathing-scale 2s ease-in-out infinite;
+  position: relative;
+}
+
+.input-bar__action-button--interrupt::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 119, 255, 0.4) 0%, rgba(22, 119, 255, 0) 70%);
+  animation: breathing-glow 2s ease-in-out infinite;
+  z-index: -1;
+}
+
+/* 声波图标容器 */
+.input-bar__action-button--recording .sound-wave-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 声波条 - 平滑变化 */
+.input-bar__action-button--recording .wave-bar {
+  fill: white;
+  transition: height 0.08s ease-out, y 0.08s ease-out;
+}
+
+/* 呼吸缩放动画 */
+@keyframes breathing-scale {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* 呼吸光晕动画 */
+@keyframes breathing-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* 按钮 - thinking 状态（spinner 转圈） */
+.input-bar__action-button--thinking {
+  background: var(--accent);
+  color: white;
+}
+
+.input-bar__action-button--thinking svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 按钮 - speaking 状态（Waveform 动画） */
+.input-bar__action-button--speaking {
+  background: var(--accent);
+  color: white;
+}
+
+.input-bar__action-button--speaking .waveform-bar {
+  animation: wave 0.6s ease-in-out infinite;
+}
+
+.input-bar__action-button--speaking .waveform-bar:nth-child(1) { animation-delay: 0s; }
+.input-bar__action-button--speaking .waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+.input-bar__action-button--speaking .waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+.input-bar__action-button--speaking .waveform-bar:nth-child(4) { animation-delay: 0.1s; }
+.input-bar__action-button--speaking .waveform-bar:nth-child(5) { animation-delay: 0s; }
+
+@keyframes wave {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+/* 禁用状态 */
+.input-bar__action-button:disabled,
+.input-bar__action-button--mic:disabled,
+.input-bar__action-button--recording:disabled,
+.input-bar__action-button--thinking:disabled,
+.input-bar__action-button--speaking:disabled,
+.input-bar__action-button.send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

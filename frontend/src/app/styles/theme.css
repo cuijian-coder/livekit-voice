@@ -1,0 +1,90 @@
+:root {
+  /* 浅色主题（默认） */
+  --theme-bg: #ffffff;
+  --theme-panel: #ffffff;
+  --theme-surface: #f5f5f5;
+  --theme-text: #333333;
+  --theme-text-dim: #999999;
+  --theme-border: #e0e0e0;
+  --theme-shadow: rgba(0, 0, 0, 0.08);
+
+  /* 通用变量 - 浅色主题 */
+  --bg: var(--theme-bg);
+  --panel: var(--theme-panel);
+  --surface: var(--theme-surface);
+  --text: var(--theme-text);
+  --text-dim: var(--theme-text-dim);
+  --border: var(--theme-border);
+  --shadow: var(--theme-shadow);
+
+  /* 主题色 */
+  --accent: #4A90E2;
+  --accent-hover: #357ABD;
+  --accent-light: rgba(74, 144, 226, 0.1);
+
+  /* 消息气泡颜色 */
+  --user-bubble: #4A90E2;
+  --user-bubble-text: #ffffff;
+  --ai-bubble: #f5f5f5;
+  --ai-bubble-text: #333333;
+
+  /* 头像颜色 */
+  --user-avatar-bg: #4A90E2;
+  --ai-avatar-bg: #e0e0e0;
+
+  /* 半径 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* 过渡 */
+  --transition: 0.2s ease;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+  --theme-bg: #1C1C1E;
+  --theme-panel: #2C2C2E;
+  --theme-surface: #3A3A3C;
+  --theme-text: #ffffff;
+  --theme-text-dim: #8e8e8e;
+  --theme-border: #3A3A3C;
+  --theme-shadow: rgba(0, 0, 0, 0.3);
+
+  /* 覆盖通用变量 */
+  --bg: var(--theme-bg);
+  --panel: var(--theme-panel);
+  --surface: var(--theme-surface);
+  --text: var(--theme-text);
+  --text-dim: var(--theme-text-dim);
+  --border: var(--theme-border);
+  --shadow: var(--theme-shadow);
+
+  /* 深色模式下 AI 气泡颜色 */
+  --ai-bubble: #3A3A3C;
+  --ai-bubble-text: #ffffff;
+  --ai-avatar-bg: #4A4A4C;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#app {
+  height: 100%;
+}

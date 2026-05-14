@@ -1,0 +1,112 @@
+.voice-button {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--transition);
+  position: relative;
+}
+
+.voice-button:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.voice-button:active {
+  transform: scale(0.95);
+}
+
+.voice-button--listening {
+  animation: pulse-ring 1.5s ease-out infinite;
+  background: #ef4444;
+}
+
+.voice-button--thinking {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.voice-button--speaking {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.waveform {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+}
+
+.waveform__bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  transition: height 0.1s ease;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+
+.status-indicator__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--text-dim);
+}
+
+.status-indicator--listening .status-indicator__dot {
+  background: #ef4444;
+  animation: blink 1s infinite;
+}
+
+.status-indicator--thinking .status-indicator__dot {
+  background: var(--accent);
+  animation: blink 1s infinite;
+}
+
+.status-indicator--speaking .status-indicator__dot {
+  background: var(--accent);
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
