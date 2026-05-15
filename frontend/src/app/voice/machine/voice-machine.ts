@@ -1,7 +1,7 @@
 import { setup, assign } from 'xstate';
 import { createInitialContext, createNewRequestId, createNewTurnId } from './voice-context';
 import type { VoiceEvent } from './voice-events';
-import { audioRecorder } from '../../services/audio-recorder';
+import { audioRecorder } from '../../runtime/audio/recorder';
 import { getLogger } from '../../core/logger';
 
 const logger = getLogger();

@@ -1,0 +1,1 @@
+export { voiceActor, getVoiceActor } from '../../voice/providers/voice-provider'
