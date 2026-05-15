@@ -1,0 +1,17 @@
+node_modules/
+.pnpm-lock.yaml
+package-lock.json
+*.local
+
+backend/node_modules/
+backend/dist/
+backend/.env
+
+frontend/node_modules/
+frontend/dist/
+
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
