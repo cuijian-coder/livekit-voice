@@ -141,8 +141,80 @@ expect(result.semantic).toBe('record')
 
 ---
 
+---
+
+### Decision 008: Monorepo 结构
+
+**日期**: 项目扩展到前后端时
+
+**决定**: 使用 pnpm workspace 管理多个包
+
+**原因**:
+- 前后端共享类型定义和常量
+- 统一依赖管理
+- 简化 CI/CD
+
+**结构**:
+```
+packages/shared/    # 共享包
+frontend/          # 前端应用
+backend/           # 后端服务
+```
+
+**影响**:
+- package.json 使用 workspace:*
+- 需要同步安装依赖
+
+---
+
+### Decision 009: 统一事件命名规范
+
+**日期**: 前后端状态机对齐时
+
+**决定**: 使用领域前缀命名事件 (session.*, audio.*, llm.*, tts.*)
+
+**原因**:
+- 事件名称更具描述性
+- 易于理解事件所属领域
+- 与后端事件名称保持一致
+
+**旧名称 → 新名称**:
+- START_RECORDING → session.start
+- STOP_RECORDING → audio.commit
+- INTERRUPT → interrupt.request
+- PLAYING → speaking (状态)
+- LLM_STARTED → llm.started
+- LLM_COMPLETE → llm.complete
+
+---
+
+### Decision 010: 提取公共 Actions
+
+**日期**: 状态机重构时
+
+**决定**: 在 setup() 中定义可复用的 assign actions
+
+**原因**:
+- 减少重复代码
+- 状态转换更清晰
+
+**实现**:
+```typescript
+setup({
+  actions: {
+    resetSession: assign({...}),
+    startTurn: assign({...}),
+    setAbortController: assign({...}),
+  }
+})
+```
+
+---
+
 ## 待记录决策
 
+- [x] 关于 monorepo 结构的决策
+- [x] 关于事件命名规范的决策
+- [x] 关于公共 actions 提取的决策
 - [ ] 关于音频能量检测算法的选择
-- [ ] 关于声波动画实现方式的决策
 - [ ] 关于 LiveKit 集成方式的规划
