@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { selectActionButton, type ButtonViewModel } from './actionButton.selector'
+import { selectActionButton } from './actionButton.selector'
 
 const createSnapshot = (state: string, error?: string) => ({
   value: state,
@@ -9,9 +9,10 @@ const createSnapshot = (state: string, error?: string) => ({
     partialTranscript: '',
     streamBuffer: '',
     sessionId: 'sess-1',
+    turnId: '',
     abortController: undefined,
-    error: error
-  }
+    error: error,
+  },
 })
 
 describe('selectActionButton', () => {
@@ -19,7 +20,6 @@ describe('selectActionButton', () => {
     it('should return record button when no input and no error', () => {
       const snapshot = createSnapshot('idle')
       const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('record')
       expect(result.disabled).toBe(false)
     })
@@ -27,7 +27,6 @@ describe('selectActionButton', () => {
     it('should return send button when has input', () => {
       const snapshot = createSnapshot('idle')
       const result = selectActionButton(snapshot, true)
-
       expect(result.semantic).toBe('send')
       expect(result.disabled).toBe(false)
     })
@@ -35,7 +34,6 @@ describe('selectActionButton', () => {
     it('should return disabled button when has error', () => {
       const snapshot = createSnapshot('idle', 'some error')
       const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('disabled')
       expect(result.disabled).toBe(true)
     })
@@ -45,7 +43,6 @@ describe('selectActionButton', () => {
     it('should return stop-recording button', () => {
       const snapshot = createSnapshot('listening')
       const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('stop-recording')
       expect(result.pulse).toBe(true)
       expect(result.disabled).toBe(false)
@@ -54,8 +51,16 @@ describe('selectActionButton', () => {
     it('should return send if has input even in listening', () => {
       const snapshot = createSnapshot('listening')
       const result = selectActionButton(snapshot, true)
-
       expect(result.semantic).toBe('send')
+    })
+  })
+
+  describe('transcribing state', () => {
+    it('should return interrupt button', () => {
+      const snapshot = createSnapshot('transcribing')
+      const result = selectActionButton(snapshot, false)
+      expect(result.semantic).toBe('interrupt')
+      expect(result.disabled).toBe(false)
     })
   })
 
@@ -63,7 +68,6 @@ describe('selectActionButton', () => {
     it('should return interrupt button', () => {
       const snapshot = createSnapshot('thinking')
       const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('interrupt')
       expect(result.disabled).toBe(false)
     })
@@ -71,27 +75,15 @@ describe('selectActionButton', () => {
     it('should return disabled for send when processing', () => {
       const snapshot = createSnapshot('thinking')
       const result = selectActionButton(snapshot, true)
-
       expect(result.semantic).toBe('send')
       expect(result.disabled).toBe(true)
     })
   })
 
-  describe('streaming state', () => {
+  describe('speaking state', () => {
     it('should return interrupt button', () => {
-      const snapshot = createSnapshot('streaming')
+      const snapshot = createSnapshot('speaking')
       const result = selectActionButton(snapshot, false)
-
-      expect(result.semantic).toBe('interrupt')
-      expect(result.disabled).toBe(false)
-    })
-  })
-
-  describe('playing state', () => {
-    it('should return interrupt button', () => {
-      const snapshot = createSnapshot('playing')
-      const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('interrupt')
       expect(result.disabled).toBe(false)
     })
@@ -101,7 +93,6 @@ describe('selectActionButton', () => {
     it('should return disabled button', () => {
       const snapshot = createSnapshot('error', 'some error')
       const result = selectActionButton(snapshot, false)
-
       expect(result.semantic).toBe('disabled')
       expect(result.disabled).toBe(true)
     })

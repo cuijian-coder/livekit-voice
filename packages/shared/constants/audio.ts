@@ -1,0 +1,15 @@
+export const AUDIO_CONFIG = {
+  SAMPLE_RATE: 16000,
+  BITS_PER_SAMPLE: 16,
+  CHANNELS: 1,
+  FRAME_DURATION_MS: 20,
+  MAX_FRAME_SIZE: 64000,
+} as const
+
+export const MAX_MESSAGE_SIZE = {
+  JSON: 4 * 1024,
+  BINARY: 64 * 1024,
+} as const
+
+export const HEARTBEAT_INTERVAL_MS = 30_000
+export const HEARTBEAT_TIMEOUT_MS = 60_000

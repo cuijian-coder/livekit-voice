@@ -1,21 +1,23 @@
+import { CONVERSATION_STATES } from '@livekit-voice/shared/constants';
+
+const s = CONVERSATION_STATES;
+
 export interface AnimationViewModel {
   type: 'none' | 'pulse' | 'spin' | 'wave';
 }
 
-export function selectAnimation(
-  snapshot: any
-): AnimationViewModel {
+export function selectAnimation(snapshot: any): AnimationViewModel {
   const state = snapshot.value as string;
 
-  if (state === 'listening') {
+  if (state === s.LISTENING) {
     return { type: 'pulse' };
   }
 
-  if (state === 'thinking') {
+  if (state === s.THINKING) {
     return { type: 'spin' };
   }
 
-  if (state === 'streaming') {
+  if (state === s.SPEAKING || state === s.TRANSCRIBING) {
     return { type: 'wave' };
   }
 

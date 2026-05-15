@@ -1,5 +1,5 @@
 import { setup, assign } from 'xstate';
-import { createInitialContext, createNewRequestId } from './voice-context';
+import { createInitialContext, createNewRequestId, createNewTurnId } from './voice-context';
 import type { VoiceEvent } from './voice-events';
 import { audioRecorder } from '../../services/audio-recorder';
 import { getLogger } from '../../core/logger';
@@ -8,22 +8,41 @@ const logger = getLogger();
 
 async function startAudioRecording() {
   try {
-    await audioRecorder.start()
-    logger.info('audio.recording.started')
+    await audioRecorder.start();
+    logger.info('audio.recording.started');
   } catch (error) {
-    logger.error('audio.recording.error', { error: String(error) })
+    logger.error('audio.recording.error', { error: String(error) });
   }
 }
 
 function stopAudioRecording() {
-  audioRecorder.stop()
-  logger.info('audio.recording.stopped')
+  audioRecorder.stop();
+  logger.info('audio.recording.stopped');
 }
 
 export const voiceMachine = setup({
   types: {
     context: {} as ReturnType<typeof createInitialContext>,
     events: {} as VoiceEvent,
+  },
+  actions: {
+    resetSession: assign({
+      transcript: () => '',
+      partialTranscript: () => '',
+      streamBuffer: () => '',
+      requestId: () => createNewRequestId(),
+      turnId: () => '',
+      abortController: () => undefined,
+      error: () => undefined,
+    }),
+    startTurn: assign({
+      turnId: () => createNewTurnId(),
+      abortController: () => undefined,
+      streamBuffer: () => '',
+    }),
+    setAbortController: assign({
+      abortController: () => new AbortController(),
+    }),
   },
 }).createMachine({
   id: 'voice',
@@ -32,20 +51,13 @@ export const voiceMachine = setup({
   states: {
     idle: {
       on: {
-        START_RECORDING: {
+        'session.start': {
           target: 'listening',
-          actions: [
-            assign({ abortController: () => undefined }),
-            assign({ requestId: () => createNewRequestId() }),
-            assign({ streamBuffer: () => '' }),
-          ],
+          actions: 'startTurn',
         },
         SUBMIT_TEXT: {
           target: 'thinking',
-          actions: [
-            assign({ abortController: () => new AbortController() }),
-            assign({ requestId: () => createNewRequestId() }),
-          ],
+          actions: ['setAbortController', assign({ requestId: () => createNewRequestId() })],
         },
       },
     },
@@ -53,100 +65,69 @@ export const voiceMachine = setup({
       entry: () => startAudioRecording(),
       exit: () => stopAudioRecording(),
       on: {
-        STOP_RECORDING: {
+        'audio.commit': {
           target: 'thinking',
-          actions: assign({ abortController: () => new AbortController() }),
+          actions: 'setAbortController',
         },
-        INTERRUPT: {
+        'interrupt.request': {
           target: 'idle',
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            abortController: () => undefined,
-            error: () => undefined,
-          }),
+          actions: 'resetSession',
+        },
+      },
+    },
+    transcribing: {
+      on: {
+        'llm.started': { target: 'thinking' },
+        'interrupt.request': { target: 'idle', actions: 'resetSession' },
+        'runtime.error': {
+          target: 'error',
+          actions: assign({ error: ({ event }: any) => (event as any).error }),
         },
       },
     },
     thinking: {
       on: {
-        LLM_DONE: {
-          target: 'streaming',
-          actions: assign({ streamBuffer: ({ event }: any) => event.fullText }),
+        'llm.complete': {
+          target: 'speaking',
+          actions: assign({ streamBuffer: ({ event }: any) => (event as any).fullText }),
         },
-        INTERRUPT: {
-          target: 'idle',
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            abortController: () => undefined,
-            error: () => undefined,
-          }),
+        'interrupt.request': { target: 'idle', actions: 'resetSession' },
+        'runtime.error': {
+          target: 'error',
+          actions: assign({ error: ({ event }: any) => (event as any).error }),
         },
       },
     },
-    streaming: {
+    speaking: {
       on: {
-        LLM_CHUNK: {
-          actions: assign({ streamBuffer: ({ event }: any) => event.text }),
+        'llm.token': {
+          actions: assign({ streamBuffer: ({ event }: any) => (event as any).text }),
         },
-        LLM_DONE: {
-          target: 'playing',
-          actions: assign({ streamBuffer: ({ event }: any) => event.fullText }),
+        'llm.complete': {
+          actions: assign({ streamBuffer: ({ event }: any) => (event as any).fullText }),
         },
-        INTERRUPT: {
-          target: 'idle',
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            abortController: () => undefined,
-            error: () => undefined,
-          }),
+        'tts.complete': { target: 'idle' },
+        'interrupt.request': { target: 'idle', actions: 'resetSession' },
+        'runtime.error': {
+          target: 'error',
+          actions: assign({ error: ({ event }: any) => (event as any).error }),
         },
       },
     },
-    playing: {
+    interrupting: {
+      entry: 'resetSession',
+      always: 'idle',
+    },
+    recovering: {
       on: {
-        TTS_FINISHED: {
-          target: 'idle',
-        },
-        INTERRUPT: {
-          target: 'idle',
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            abortController: () => undefined,
-            error: () => undefined,
-          }),
-        },
+        'session.start': 'idle',
       },
     },
     error: {
       on: {
-        START_RECORDING: 'idle',
+        'session.start': 'idle',
         SUBMIT_TEXT: 'thinking',
       },
-    },
-  },
-  on: {
-    INTERRUPT: {
-      target: '#voice.idle',
-      actions: assign({
-        transcript: () => '',
-        partialTranscript: () => '',
-        streamBuffer: () => '',
-        requestId: () => createNewRequestId(),
-        abortController: () => undefined,
-        error: () => undefined,
-      }),
     },
   },
 });

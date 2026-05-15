@@ -118,11 +118,11 @@ export class InputBar {
     if (buttonVm.semantic === 'send') {
       this.sendMessage();
     } else if (buttonVm.semantic === 'record') {
-      voiceActor.send({ type: 'START_RECORDING' });
+      voiceActor.send({ type: 'session.start' });
     } else if (buttonVm.semantic === 'stop-recording') {
-      voiceActor.send({ type: 'STOP_RECORDING' });
+      voiceActor.send({ type: 'audio.commit' });
     } else if (buttonVm.semantic === 'interrupt') {
-      voiceActor.send({ type: 'INTERRUPT' });
+      voiceActor.send({ type: 'interrupt.request' });
     }
   }
 

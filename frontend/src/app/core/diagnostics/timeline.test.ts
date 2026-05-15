@@ -9,10 +9,10 @@ describe('Timeline', () => {
   })
 
   it('should add event', () => {
-    timeline.add('START_RECORDING', { requestId: 'req-1' })
+    timeline.add('session.start', { requestId: 'req-1' })
     const events = timeline.getRecent()
     expect(events).toHaveLength(1)
-    expect(events[0].event).toBe('START_RECORDING')
+    expect(events[0].event).toBe('session.start')
   })
 
   it('should include id in event', () => {

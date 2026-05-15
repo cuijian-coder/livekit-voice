@@ -1,12 +1,7 @@
 export async function* mockASRStream(
   _signal: AbortSignal
 ): AsyncGenerator<string> {
-  const mockPhrases = [
-    'Hello',
-    'how are',
-    'you doing',
-    'today',
-  ];
+  const mockPhrases = ['Hello', 'how are', 'you doing', 'today'];
 
   for (const phrase of mockPhrases) {
     if (_signal.aborted) {
@@ -31,9 +26,7 @@ export async function* mockLLMStream(
     }
 
     const isPunctuation = /[.,!?;:]/.test(words[i]);
-    const delay = isPunctuation
-      ? 200 + Math.random() * 200
-      : 60 + Math.random() * 60;
+    const delay = isPunctuation ? 200 + Math.random() * 200 : 60 + Math.random() * 60;
 
     await sleep(delay);
 

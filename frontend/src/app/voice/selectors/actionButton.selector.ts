@@ -1,3 +1,7 @@
+import { CONVERSATION_STATES } from '@livekit-voice/shared/constants';
+
+const s = CONVERSATION_STATES
+
 export type ButtonSemantic =
   | 'record'
   | 'stop-recording'
@@ -38,7 +42,7 @@ export function selectActionButton(
 ): ButtonViewModel {
   const state = snapshot.value as string;
   const hasError = snapshot.context.error !== undefined;
-  const isProcessing = state === 'thinking' || state === 'streaming';
+  const isProcessing = state === s.THINKING || state === s.SPEAKING || state === s.TRANSCRIBING;
 
   if (hasError) {
     return {
@@ -60,7 +64,7 @@ export function selectActionButton(
     };
   }
 
-  if (state === 'listening') {
+  if (state === s.LISTENING) {
     return {
       semantic: 'stop-recording',
       label: BUTTON_LABELS['stop-recording'],
@@ -70,17 +74,7 @@ export function selectActionButton(
     };
   }
 
-  if (state === 'thinking' || state === 'streaming') {
-    return {
-      semantic: 'interrupt',
-      label: BUTTON_LABELS.interrupt,
-      className: BUTTON_CLASSES.interrupt,
-      pulse: false,
-      disabled: false,
-    };
-  }
-
-  if (state === 'playing') {
+  if (state === s.THINKING || state === s.SPEAKING || state === s.TRANSCRIBING) {
     return {
       semantic: 'interrupt',
       label: BUTTON_LABELS.interrupt,

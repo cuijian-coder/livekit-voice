@@ -11,17 +11,21 @@
     "lint:fix": "eslint . --ext ts --fix",
     "format": "prettier --write .",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@livekit-voice/shared": "workspace:*",
+    "xstate": "^5.31.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.7",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "~6.0.2",
-    "vite": "^8.0.12"
-  },
-  "dependencies": {
-    "xstate": "^5.31.1"
+    "vite": "^8.0.12",
+    "vitest": "^3.0.4"
   }
 }

@@ -1,24 +1,24 @@
 export type UserEvent =
-  | { type: 'START_RECORDING' }
-  | { type: 'STOP_RECORDING' }
-  | { type: 'INTERRUPT' }
+  | { type: 'session.start' }
+  | { type: 'audio.commit' }
+  | { type: 'interrupt.request' }
   | { type: 'SUBMIT_TEXT'; text: string };
 
 export type SystemEvent =
-  | { type: 'ASR_PARTIAL'; text: string }
-  | { type: 'ASR_FINAL'; text: string }
-  | { type: 'STREAM_STARTED' }
-  | { type: 'LLM_CHUNK'; text: string }
-  | { type: 'LLM_DONE'; fullText: string }
-  | { type: 'TTS_STARTED' }
-  | { type: 'TTS_FINISHED' }
-  | { type: 'ERROR'; error: string };
+  | { type: 'asr.partial'; text: string }
+  | { type: 'asr.final'; text: string }
+  | { type: 'llm.started' }
+  | { type: 'llm.token'; text: string }
+  | { type: 'llm.complete'; fullText: string }
+  | { type: 'tts.started' }
+  | { type: 'tts.complete' }
+  | { type: 'runtime.error'; error: string };
 
 export type VoiceEvent = UserEvent | SystemEvent;
 
 export function isUserEvent(event: VoiceEvent): event is UserEvent {
   const type = (event as { type: string }).type;
-  return type === 'START_RECORDING' || type === 'STOP_RECORDING' || type === 'INTERRUPT' || type === 'SUBMIT_TEXT';
+  return type === 'session.start' || type === 'audio.commit' || type === 'interrupt.request' || type === 'SUBMIT_TEXT';
 }
 
 export function isSystemEvent(event: VoiceEvent): event is SystemEvent {

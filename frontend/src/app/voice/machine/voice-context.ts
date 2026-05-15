@@ -3,6 +3,7 @@ export interface VoiceContext {
   partialTranscript: string;
   streamBuffer: string;
   sessionId: string;
+  turnId: string;
   requestId: string;
   abortController?: AbortController;
   error?: string;
@@ -14,6 +15,7 @@ export function createInitialContext(): VoiceContext {
     partialTranscript: '',
     streamBuffer: '',
     sessionId: generateSessionId(),
+    turnId: '',
     requestId: generateRequestId(),
     abortController: undefined,
     error: undefined,
@@ -28,6 +30,14 @@ function generateRequestId(): string {
   return `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
+function generateTurnId(): string {
+  return `turn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
 export function createNewRequestId(): string {
-  return `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  return generateRequestId();
+}
+
+export function createNewTurnId(): string {
+  return generateTurnId();
 }

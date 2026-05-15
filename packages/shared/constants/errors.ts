@@ -1,0 +1,9 @@
+export const ERROR_CODES = {
+  INVALID_MESSAGE: 4001,
+  SESSION_NOT_FOUND: 4002,
+  STREAM_ERROR: 4003,
+  AI_SERVICE_ERROR: 4004,
+  INTERNAL_ERROR: 5001,
+} as const
+
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES]

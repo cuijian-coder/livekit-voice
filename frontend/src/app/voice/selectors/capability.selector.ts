@@ -1,3 +1,7 @@
+import { CONVERSATION_STATES } from '@livekit-voice/shared/constants';
+
+const s = CONVERSATION_STATES;
+
 export interface VoiceCapabilities {
   canRecord: boolean;
   canInterrupt: boolean;
@@ -13,11 +17,11 @@ export function selectCapabilities(
   const state = snapshot.value as string;
   const hasError = snapshot.context.error !== undefined;
 
-  const isProcessing = state === 'thinking' || state === 'streaming' || state === 'playing';
-  const isListening = state === 'listening';
+  const isProcessing = state === s.THINKING || state === s.SPEAKING || state === s.TRANSCRIBING;
+  const isListening = state === s.LISTENING;
 
   return {
-    canRecord: state === 'idle' && !hasInput && !hasError,
+    canRecord: state === s.IDLE && !hasInput && !hasError,
     canInterrupt: isProcessing && !hasError,
     canSubmitText: hasInput && !isProcessing && !hasError,
     canMute: isListening,
