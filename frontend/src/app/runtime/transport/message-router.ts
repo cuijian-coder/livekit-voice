@@ -1,7 +1,7 @@
 import { SERVER_EVENTS } from './protocol'
 import type { ServerEventName } from '@livekit-voice/shared/protocol'
 import { voiceActor } from '../session'
-import { getLogger } from '../../shared/logger'
+import { getLogger } from '@livekit-voice/shared/logger'
 
 const logger = getLogger()
 

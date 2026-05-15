@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./logger": "./logger/index.ts",
     "./protocol": "./protocol/index.ts",
     "./constants": "./constants/index.ts",
     "./types": "./types/index.ts",

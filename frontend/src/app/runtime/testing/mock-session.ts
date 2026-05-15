@@ -1,6 +1,6 @@
 import type { VoiceState } from '../../types/voice'
 import { getMockResponse } from './mock-llm'
-import { getLogger } from '../../shared/logger'
+import { getLogger } from '@livekit-voice/shared/logger'
 
 const logger = getLogger()
 

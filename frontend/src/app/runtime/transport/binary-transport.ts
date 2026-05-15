@@ -1,6 +1,6 @@
 import { wsClient } from './websocket-client'
 import { CLIENT_EVENTS } from './protocol'
-import { getLogger } from '../../shared/logger'
+import { getLogger } from '@livekit-voice/shared/logger'
 
 const logger = getLogger()
 

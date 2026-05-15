@@ -1,4 +1,4 @@
-import { getLogger } from '../../shared/logger'
+import { getLogger } from '@livekit-voice/shared/logger'
 
 const isDev = import.meta.env.DEV
 

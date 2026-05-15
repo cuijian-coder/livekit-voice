@@ -2,7 +2,7 @@ import { DEFAULT_TRANSPORT_CONFIG, type TransportConfig, type ClientEventName } 
 import type { TransportStateInfo } from './transport-state'
 import { ReconnectManager } from './reconnect-manager'
 import { createInitialTransportState } from './transport-state'
-import { getLogger } from '../../shared/logger'
+import { getLogger } from '@livekit-voice/shared/logger'
 
 const logger = getLogger()
 

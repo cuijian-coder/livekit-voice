@@ -2,7 +2,7 @@ import { setup, assign } from 'xstate';
 import { createInitialContext, createNewRequestId, createNewTurnId } from './voice-context';
 import type { VoiceEvent } from './voice-events';
 import { audioRecorder } from '../../runtime/audio/recorder';
-import { getLogger } from '../../shared/logger';
+import { getLogger } from '@livekit-voice/shared/logger';
 
 const logger = getLogger();
 

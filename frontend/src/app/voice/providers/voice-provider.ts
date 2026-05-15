@@ -1,6 +1,6 @@
 import { createActor } from 'xstate';
 import { voiceMachine } from '../machine';
-import { getLogger } from '../../shared/logger';
+import { getLogger } from '@livekit-voice/shared/logger';
 import { validateVoiceState, validateTransition, timeline } from '../../core/diagnostics';
 
 const logger = getLogger();

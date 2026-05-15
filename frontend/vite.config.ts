@@ -9,6 +9,7 @@ export default defineConfig({
       '@livekit-voice/shared/types': resolve(__dirname, '../packages/shared/types'),
       '@livekit-voice/shared/schemas': resolve(__dirname, '../packages/shared/schemas'),
       '@livekit-voice/shared/protocol': resolve(__dirname, '../packages/shared/protocol'),
+      '@livekit-voice/shared/logger': resolve(__dirname, '../packages/shared/logger'),
     }
   },
   test: {
