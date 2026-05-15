@@ -1,6 +1,6 @@
 import type { VoiceState } from '../../types/voice'
 import { getMockResponse } from './mock-llm'
-import { getLogger } from '../../core/logger'
+import { getLogger } from '../../shared/logger'
 
 const logger = getLogger()
 

@@ -1,6 +1,6 @@
 import { wsClient } from './websocket-client'
 import { CLIENT_EVENTS } from './protocol'
-import { getLogger } from '../../core/logger'
+import { getLogger } from '../../shared/logger'
 
 const logger = getLogger()
 

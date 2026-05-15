@@ -1,4 +1,4 @@
-import { getLogger } from '../../core/logger'
+import { getLogger } from '../../shared/logger'
 
 const logger = getLogger()
 

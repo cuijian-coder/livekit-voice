@@ -1,4 +1,4 @@
-import { getLogger } from '../logger';
+import { getLogger } from '../../shared/logger';
 import { invariant } from './invariant';
 import type { VoiceContext } from '../../voice/machine/voice-context';
 

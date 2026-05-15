@@ -1,4 +1,4 @@
-import { getLogger } from '../logger'
+import { getLogger } from '../../shared/logger'
 
 const isDev = import.meta.env.DEV
 
