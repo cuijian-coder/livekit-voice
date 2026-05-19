@@ -1,4 +1,5 @@
 import { getLogger } from '@livekit-voice/shared/logger'
+import { invariant } from '../../../../../self-healing/assert'
 import { speechDetector, type SpeechState } from './speech-detector'
 import { binaryTransport } from '../transport'
 import { wsClient } from '../transport/websocket-client'
@@ -43,6 +44,7 @@ export class UtteranceManager {
   }
 
   async commit(): Promise<void> {
+    invariant(this.turnId !== '', 'turnId required before commit')
     if (!this.isActive) {
       logger.warn('utteranceManager.commit.ignored.notActive')
       return

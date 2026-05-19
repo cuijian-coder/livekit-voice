@@ -14,6 +14,7 @@ import { QwenLlmWorker } from '../../workers/llm/qwen-llm.worker.js'
 import { NlsGatewayTtsWorker } from '../../workers/tts/nls-gateway-tts.worker.js'
 import { AliyunStreamingTtsWorker } from '../../workers/tts/aliyun-streaming-tts.worker.js'
 import { getConfig } from '../../infra/config/config.js'
+import { invariant, assertNotNull } from '../../../../self-healing/assert.js'
 
 const s = CONVERSATION_STATES
 
@@ -92,6 +93,7 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   private async runLlm(): Promise<void> {
+    invariant(this.currentTurnId !== '', 'turnId required before llm streaming')
     const signal = this.abortController.signal
     if (signal.aborted) {
       this.logger.warn({ sessionId: this.sessionId }, 'llm.start.aborted')
@@ -293,6 +295,7 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   private async handleAudioCommit(turnId: string, finalSeq: number): Promise<void> {
+    assertNotNull(this.currentTurnId, 'turnId must be set before audio commit')
     if (this._state !== CONVERSATION_STATES.LISTENING) {
       this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'audio.commit.invalid.state')
       return
@@ -421,7 +424,7 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   send(msg: any): void {
-    if (this.ws.readyState !== this.ws.OPEN) return
+    invariant(this.ws.readyState === this.ws.OPEN, 'ws must be OPEN before sending JSON message')
     try {
       this.ws.send(JSON.stringify(msg))
     } catch (err) {
@@ -430,7 +433,8 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   sendBinary(data: Buffer): void {
-    if (this.ws.readyState !== this.ws.OPEN) return
+    invariant(this.ws.readyState === this.ws.OPEN, 'ws must be OPEN before sending binary data')
+    invariant(data != null && data.length > 0, 'binary data must be non-empty')
     try {
       this.ws.send(data, { binary: true })
     } catch (err) {

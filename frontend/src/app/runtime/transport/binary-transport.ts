@@ -1,5 +1,6 @@
 import { wsClient } from './websocket-client'
 import { getLogger } from '@livekit-voice/shared/logger'
+import { invariant, assertNotNull } from '../../../../../self-healing/assert'
 
 const logger = getLogger()
 
@@ -16,6 +17,11 @@ export class BinaryTransport {
   }
 
   sendFrame(frame: { seq: number, pcm: Uint8Array }): void {
+    invariant(this.isActive, 'binaryTransport must be active before sendFrame')
+    invariant(this.currentTurnId !== '', 'turnId must be set before sendFrame')
+    assertNotNull(frame.pcm, 'frame.pcm must not be null')
+    invariant(frame.pcm.length > 0, 'frame.pcm must be non-empty')
+
     if (!this.isActive) {
       logger.warn('binaryTransport.send.ignored.not.active')
       return
@@ -55,6 +61,10 @@ export class BinaryTransport {
   }
 
   async commit(): Promise<void> {
+    invariant(this.isActive, 'binaryTransport must be active before commit')
+    invariant(this.currentTurnId !== '', 'turnId required before commit')
+    invariant(this.lastSeq >= 0, 'at least one frame must be sent before commit')
+
     if (!this.isActive || !this.currentTurnId) {
       logger.warn('binaryTransport.commit.ignored')
       return

@@ -6,6 +6,7 @@ import { speechDetector } from '../../runtime/audio/speech-detector';
 import { binaryTransport } from '../../runtime/transport';
 import { wsClient } from '../../runtime/transport/websocket-client';
 import { getLogger } from '@livekit-voice/shared/logger';
+import { invariant, assertNotNull } from '../../../../../self-healing/assert';
 
 const logger = getLogger();
 
@@ -48,6 +49,7 @@ export const voiceMachine = setup({
       abortController: () => new AbortController(),
     }),
     startTurnTransport: ({ context }) => {
+      invariant(context.turnId !== '', 'turnId required before startTurnTransport')
       binaryTransport.startTurn(context.turnId)
     },
     commitAudio: async ({ context }) => {

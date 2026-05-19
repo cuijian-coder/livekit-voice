@@ -3,6 +3,7 @@ import type { TransportStateInfo } from './transport-state'
 import { ReconnectManager } from './reconnect-manager'
 import { createInitialTransportState } from './transport-state'
 import { getLogger } from '@livekit-voice/shared/logger'
+import { invariant } from '../../../../../self-healing/assert'
 
 const logger = getLogger()
 
@@ -75,10 +76,8 @@ export class WebSocketClient {
   }
 
   send(event: { type: ClientEventName; [key: string]: unknown }): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      logger.warn('transport.send.failed.not.connected')
-      return
-    }
+    invariant(this.ws != null, 'ws must be initialized before send')
+    invariant(this.ws.readyState === WebSocket.OPEN, 'ws must be OPEN before sending JSON message')
 
     try {
       this.ws.send(JSON.stringify(event))
@@ -89,10 +88,9 @@ export class WebSocketClient {
   }
 
   sendBinary(data: Uint8Array): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      logger.warn('transport.sendBinary.failed.not.connected')
-      return
-    }
+    invariant(this.ws != null, 'ws must be initialized before sendBinary')
+    invariant(this.ws.readyState === WebSocket.OPEN, 'ws must be OPEN before sending binary data')
+    invariant(data != null && data.length > 0, 'binary data must be non-empty')
 
     try {
       this.ws.send(data)

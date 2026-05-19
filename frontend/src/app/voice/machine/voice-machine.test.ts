@@ -1,5 +1,45 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createActor } from 'xstate'
+
+vi.mock('../../runtime/transport/websocket-client', () => ({
+  wsClient: {
+    send: vi.fn(),
+    sendBinary: vi.fn(),
+    connect: vi.fn().mockResolvedValue(undefined),
+    disconnect: vi.fn(),
+    onMessage: vi.fn(),
+    onBinary: vi.fn(),
+    onStateChange: vi.fn(),
+    getState: vi.fn().mockReturnValue({ state: 'connected' }),
+  },
+}))
+
+vi.mock('../../runtime/transport', () => ({
+  binaryTransport: {
+    startTurn: vi.fn(),
+    sendFrame: vi.fn(),
+    flush: vi.fn().mockResolvedValue(undefined),
+    commit: vi.fn().mockResolvedValue(undefined),
+    cancel: vi.fn(),
+  },
+}))
+
+vi.mock('../../runtime/audio/speech-detector', () => ({
+  speechDetector: {
+    setStateChangeHandler: vi.fn(),
+    setAssistantSpeaking: vi.fn(),
+    reset: vi.fn(),
+  },
+}))
+
+vi.mock('../../runtime/audio/recorder', () => ({
+  audioRecorder: {
+    start: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn(),
+    resetWorkletSeq: vi.fn(),
+  },
+}))
+
 import { voiceMachine } from './voice-machine'
 
 describe('voiceMachine', () => {

@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    env: {
+      DISABLE_INVARIANTS: 'true',
+    },
   },
   resolve: {
     alias: {
