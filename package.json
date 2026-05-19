@@ -8,10 +8,10 @@
     "build": "turbo build",
     "test": "turbo test",
     "test:run": "turbo test:run",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --config self-healing/playwright.config.ts",
     "typecheck": "turbo typecheck",
     "lint": "turbo lint",
-    "doctor": "tsx scripts/doctor.ts"
+    "doctor": "tsx self-healing/doctor.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

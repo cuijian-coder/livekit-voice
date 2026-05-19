@@ -21,13 +21,14 @@ AI determines automatically based on exit code and output:
 
 ```
 self-healing/
-├── README.md                    # This file
-├── doctor.ts                    # Health check script
-├── playwright.config.ts         # E2E configuration
-├── e2e/                         # E2E tests
-│   ├── audio-runtime.spec.ts    # Audio runtime checks
-│   └── conversation-flow.spec.ts # Conversation flow tests
-└── commands.md                  # Command reference
+├── turbo.json                    # Turbo configuration
+├── README.md                     # This file
+├── doctor.ts                     # Health check script
+├── playwright.config.ts          # E2E configuration
+├── commands.md                   # Command reference
+└── e2e/                          # E2E tests
+    ├── audio-runtime.spec.ts     # Audio runtime checks
+    └── conversation-flow.spec.ts # Conversation flow tests
 ```
 
 ---

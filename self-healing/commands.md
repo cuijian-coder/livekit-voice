@@ -1,115 +1,115 @@
-# 命令参考
+# Command Reference
 
-## 常用命令
+## Common Commands
 
-| 命令 | 描述 | Exit Code |
-|------|------|-----------|
-| `pnpm doctor` | 运行健康检查 | 0=通过, 1=失败 |
-| `pnpm test` | 运行单元测试 (watch) | 0=通过, 1=失败 |
-| `pnpm test:run` | 运行单元测试 (单次) | 0=通过, 1=失败 |
-| `pnpm test:e2e` | 运行 Playwright E2E | 0=通过, 1=失败 |
-| `pnpm dev` | 启动开发服务器 | - |
-| `pnpm build` | 构建项目 | 0=通过 |
-| `pnpm typecheck` | TypeScript 类型检查 | 0=通过, 1=失败 |
-| `pnpm lint` | 代码规范检查 | 0=通过 |
+| Command | Description | Exit Code |
+|---------|-------------|-----------|
+| `pnpm doctor` | Run health check | 0=pass, 1=fail |
+| `pnpm test` | Run unit tests (watch) | 0=pass, 1=fail |
+| `pnpm test:run` | Run unit tests (single) | 0=pass, 1=fail |
+| `pnpm test:e2e` | Run Playwright E2E | 0=pass, 1=fail |
+| `pnpm dev` | Start dev servers | - |
+| `pnpm build` | Build project | 0=pass |
+| `pnpm typecheck` | TypeScript check | 0=pass, 1=fail |
+| `pnpm lint` | Lint check | 0=pass |
 
-## Turbo 命令
+## Turbo Commands
 
 ```bash
-# 在根目录运行
+# Run at root with turbo
 pnpm turbo <task> --filter=<package>
 ```
 
-示例：
+Examples:
 ```bash
 pnpm turbo typecheck --filter=frontend
 pnpm turbo test --filter=backend
 pnpm turbo dev --filter=frontend
 ```
 
-## Doctor 检查项
+## Doctor Checks
 
 ```
 ✓ frontend         HTTP localhost:5173 -> 200 OK
 ✓ backend          HTTP localhost:3000/health -> 200 OK
-✓ websocket        ws://localhost:3000/ws -> 连接成功
-✓ qwen-api-key     env QWEN_API_KEY 非空
-✓ backend-port     env PORT 有效 (1024-65535)
+✓ websocket        ws://localhost:3000/ws -> Connected
+✓ qwen-api-key     env QWEN_API_KEY non-empty
+✓ backend-port     env PORT valid (1024-65535)
 ✓ node-version     process.version >= 20.0.0
 ```
 
-## 完整验证流程
+## Full Verification Pipeline
 
 ```bash
-# 1. 健康检查
+# 1. Health check
 pnpm doctor
-# 查看详细报告
+# View detailed report
 cat artifacts/doctor-report.json
 
-# 2. 单元测试
+# 2. Unit tests
 pnpm test:run
 
-# 3. E2E 测试
+# 3. E2E tests
 pnpm test:e2e
 
-# 一行执行
+# One-liner
 pnpm doctor && pnpm test:run && pnpm test:e2e
 ```
 
-## 调试
+## Debugging
 
 ```bash
-# 查看 backend 日志
+# View backend logs
 tail -f /tmp/server.log
 
-# 查看 frontend 日志
+# View frontend logs
 tail -f /tmp/frontend.log
 
-# 检查进程
+# Check processes
 ps aux | grep -E "tsx|node|vite" | grep -v grep
 
-# 直接运行 doctor
+# Run doctor directly
 cd /home/jiancui2026/projects/livekit-voice
-npx tsx scripts/doctor.ts
+npx tsx self-healing/doctor.ts
 ```
 
-## 常见问题
+## Common Issues
 
-### Doctor 显示 frontend 失败
+### Doctor shows frontend failed
 
 ```bash
-# 检查 frontend 是否运行
+# Check if frontend is running
 curl -s http://localhost:5173 > /dev/null && echo "OK" || echo "Not running"
 
-# 重启 frontend
+# Restart frontend
 cd frontend && pnpm dev
 ```
 
-### Doctor 显示 backend 失败
+### Doctor shows backend failed
 
 ```bash
-# 检查 backend 是否运行
+# Check backend
 curl -s http://localhost:3000/health
 
-# 重启 backend
+# Restart backend
 cd backend && node --import tsx src/main.ts
 ```
 
-### WebSocket 连接失败
+### WebSocket connection failed
 
 ```bash
-# 检查 backend WebSocket 端点
-# ws://localhost:3000/ws 应该可以连接
+# Verify backend WebSocket endpoint
+# ws://localhost:3000/ws should connect
 
-# 查看 backend 是否正常
+# Check backend is healthy
 curl -s http://localhost:3000/health
 ```
 
-## Exit Code 参考
+## Exit Codes
 
-| Code | 含义 |
-|------|------|
-| 0 | 成功，所有检查通过 |
-| 1 | 失败，至少一项检查未通过 |
-| 2 | TypeScript 编译错误 |
-| 3 | ESLint 检查失败 |
+| Code | Meaning |
+|------|---------|
+| 0 | Success, all checks passed |
+| 1 | Failure, at least one check failed |
+| 2 | TypeScript compilation error |
+| 3 | ESLint check failed |
