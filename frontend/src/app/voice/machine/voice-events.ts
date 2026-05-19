@@ -12,6 +12,7 @@ export type SystemEvent =
   | { type: 'llm.complete'; fullText: string }
   | { type: 'tts.started' }
   | { type: 'tts.complete' }
+  | { type: 'INTERRUPTING' }
   | { type: 'runtime.error'; error: string };
 
 export type VoiceEvent = UserEvent | SystemEvent;

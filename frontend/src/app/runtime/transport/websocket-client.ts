@@ -7,6 +7,7 @@ import { getLogger } from '@livekit-voice/shared/logger'
 const logger = getLogger()
 
 type MessageHandler = (event: { type: string; [key: string]: unknown }) => void
+type BinaryHandler = (data: Uint8Array) => void
 type StateChangeHandler = (state: TransportStateInfo) => void
 
 export class WebSocketClient {
@@ -15,6 +16,7 @@ export class WebSocketClient {
   private reconnectManager: ReconnectManager
   private state: TransportStateInfo = createInitialTransportState()
   private messageHandlers: Set<MessageHandler> = new Set()
+  private binaryHandlers: Set<BinaryHandler> = new Set()
   private stateHandlers: Set<StateChangeHandler> = new Set()
 
   constructor(config: TransportConfig = DEFAULT_TRANSPORT_CONFIG) {
@@ -43,6 +45,10 @@ export class WebSocketClient {
         }
 
         this.ws.onmessage = (event) => {
+          if (event.data instanceof ArrayBuffer) {
+            this.binaryHandlers.forEach(handler => handler(new Uint8Array(event.data)))
+            return
+          }
           try {
             const data = JSON.parse(event.data)
             this.messageHandlers.forEach((handler) => handler(data))
@@ -109,6 +115,11 @@ export class WebSocketClient {
   onMessage(handler: MessageHandler): () => void {
     this.messageHandlers.add(handler)
     return () => this.messageHandlers.delete(handler)
+  }
+
+  onBinary(handler: BinaryHandler): () => void {
+    this.binaryHandlers.add(handler)
+    return () => this.binaryHandlers.delete(handler)
   }
 
   onStateChange(handler: StateChangeHandler): () => void {

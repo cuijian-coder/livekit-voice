@@ -1,4 +1,5 @@
 import { WebSocket } from 'ws'
+import type { Logger } from 'pino'
 import { getConfig } from '../../infra/config/config.js'
 
 export interface AsrResult {
@@ -7,14 +8,14 @@ export interface AsrResult {
 }
 
 export interface AsrWorker {
-  stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal): AsyncIterable<AsrResult>
+  stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal, logger?: Logger): AsyncIterable<AsrResult>
 }
 
 export class QwenAsrWorker implements AsrWorker {
   private config = getConfig()
   private wsUrl = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference'
 
-  async *stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal): AsyncIterable<AsrResult> {
+  async *stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal, logger?: Logger): AsyncIterable<AsrResult> {
     let ws: WebSocket | null = null
     let taskStarted = false
     let finished = false
@@ -22,6 +23,7 @@ export class QwenAsrWorker implements AsrWorker {
     let rejectNext: (e: Error) => void
     let eventQueue: AsrResult[] = []
     let eventReject: ((e: Error) => void) | null = null
+    let audioBytesSent = 0
 
     const nextResult = (): Promise<AsrResult> =>
       new Promise((resolve, reject) => {
@@ -44,9 +46,11 @@ export class QwenAsrWorker implements AsrWorker {
     }
 
     const cleanup = () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.close()
-      }
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close()
+        }
+      } catch { /* ignore close errors */ }
       ws = null
     }
 
@@ -58,8 +62,14 @@ export class QwenAsrWorker implements AsrWorker {
           },
         })
 
-        ws.on('open', () => resolve())
-        ws.on('error', (err) => reject(new Error(`ASR WebSocket error: ${err.message}`)))
+        ws.on('open', () => {
+          logger?.debug({ url: this.wsUrl }, 'dashscope.asr.connected')
+          resolve()
+        })
+        ws.on('error', (err) => {
+          logger?.error({ err: err.message }, 'dashscope.asr.error')
+          reject(new Error(`ASR WebSocket error: ${err.message}`))
+        })
         ws.on('close', () => {
           if (!finished && !taskStarted) {
             reject(new Error('ASR connection closed before task-started'))
@@ -68,33 +78,40 @@ export class QwenAsrWorker implements AsrWorker {
 
         ws.on('message', (data) => {
           if (signal.aborted) return
-          const wsConn = ws!
           try {
             const msg = JSON.parse(data.toString())
             const event = msg.header?.event
 
             if (event === 'task-started') {
               taskStarted = true
+              logger?.debug({ model: this.config.ASR_MODEL }, 'dashscope.asr.task_started')
               resolve()
             } else if (event === 'result-generated') {
               const sentence = msg.payload?.output?.sentence
               if (!sentence) return
               const text = sentence.text ?? ''
               const isFinal = sentence.sentence_end === true
+              if (isFinal) {
+                logger?.debug({ text }, 'dashscope.asr.final')
+              }
               queueResult({ text, isFinal })
             } else if (event === 'task-finished') {
               finished = true
-              cleanup()
+              logger?.debug({}, 'dashscope.asr.finished')
+              if (rejectNext) {
+                rejectNext(new Error('__TASK_FINISHED__'))
+                resolveNext = rejectNext = eventReject = undefined as any
+              }
             } else if (event === 'task-failed') {
               const err = new Error(
                 `ASR task failed: ${msg.header?.error_code} ${msg.header?.error_message}`
               )
+              logger?.error({ err: err.message }, 'dashscope.asr.failed')
               if (rejectNext) rejectNext(err)
               if (eventReject) eventReject(err)
               cleanup()
             }
           } catch {
-            // ignore parse errors
           }
         })
       })
@@ -111,7 +128,7 @@ export class QwenAsrWorker implements AsrWorker {
             task_group: 'audio',
             task: 'asr',
             function: 'recognition',
-            model: this.config.ASR_MODEL,
+            model: 'fun-asr-realtime',
             parameters: {
               format: this.config.ASR_FORMAT,
               sample_rate: this.config.ASR_SAMPLE_RATE,
@@ -126,6 +143,7 @@ export class QwenAsrWorker implements AsrWorker {
         for await (const chunk of audioStream) {
           if (signal.aborted || wsConn.readyState !== WebSocket.OPEN) break
           wsConn.send(chunk, { binary: true })
+          audioBytesSent += chunk.length
           await new Promise((r) => setTimeout(r, 50))
         }
 
@@ -140,6 +158,7 @@ export class QwenAsrWorker implements AsrWorker {
               payload: { input: {} },
             })
           )
+          logger?.debug({ bytesSent: audioBytesSent }, 'dashscope.asr.audio_sent')
         }
       })()
 
@@ -155,16 +174,21 @@ export class QwenAsrWorker implements AsrWorker {
 
       await audioSendPromise
     } finally {
-      cleanup()
+      try {
+        if (signal.aborted) {
+          logger?.debug({}, 'dashscope.asr.aborted')
+        }
+        cleanup()
+      } catch { /* prevent cleanup errors from propagating into generator */ }
     }
   }
 
-  async transcribe(audioData: Buffer, signal: AbortSignal): Promise<string> {
+  async transcribe(audioData: Buffer, signal: AbortSignal, logger?: Logger): Promise<string> {
     const audioStream = (async function* () {
       yield audioData
     })()
     let finalText = ''
-    for await (const result of this.stream(audioStream, signal)) {
+    for await (const result of this.stream(audioStream, signal, logger)) {
       if (result.isFinal) finalText = result.text
     }
     return finalText || '[no final result]'
@@ -172,7 +196,7 @@ export class QwenAsrWorker implements AsrWorker {
 }
 
 export class MockAsrWorker implements AsrWorker {
-  async *stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal): AsyncIterable<AsrResult> {
+  async *stream(audioStream: AsyncIterable<Buffer>, signal: AbortSignal, logger?: Logger): AsyncIterable<AsrResult> {
     const chunks: Buffer[] = []
     for await (const chunk of audioStream) {
       if (signal.aborted) return
@@ -184,7 +208,7 @@ export class MockAsrWorker implements AsrWorker {
     yield { text: `[mock ASR result: ${audioData.length} bytes]`, isFinal: true }
   }
 
-  async transcribe(audioData: Buffer, signal: AbortSignal): Promise<string> {
+  async transcribe(audioData: Buffer, signal: AbortSignal, logger?: Logger): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 100))
     if (signal.aborted) throw new Error('aborted')
     return `[transcribed: ${audioData.length} bytes]`

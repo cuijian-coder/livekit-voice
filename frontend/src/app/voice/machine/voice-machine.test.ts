@@ -49,12 +49,12 @@ describe('voiceMachine', () => {
     expect(snapshot.value).toBe('speaking')
   })
 
-  it('should transition to idle on tts.complete', () => {
+  it('should transition to listening on tts.complete (continuous conversation)', () => {
     actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
     actor.send({ type: 'llm.complete', fullText: 'complete' })
     actor.send({ type: 'tts.complete' })
     const snapshot = actor.getSnapshot()
-    expect(snapshot.value).toBe('idle')
+    expect(snapshot.value).toBe('listening')
   })
 
   it('should transition to idle on interrupt.request from listening', () => {
@@ -139,5 +139,82 @@ describe('voiceMachine', () => {
     actor.send({ type: 'session.start' })
     const snapshot = actor.getSnapshot()
     expect(snapshot.value).toBe('idle')
+  })
+
+  describe('asr.partial in listening state', () => {
+    it('should update partialTranscript on asr.partial in listening', () => {
+      actor.send({ type: 'session.start' })
+      actor.send({ type: 'asr.partial', text: '你好' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.context.partialTranscript).toBe('你好')
+    })
+
+    it('should update partialTranscript on asr.partial in thinking', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+      actor.send({ type: 'asr.partial', text: '正在说话' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.context.partialTranscript).toBe('正在说话')
+    })
+  })
+
+  describe('asr.final in listening state', () => {
+    it('should update transcript on asr.final in listening', () => {
+      actor.send({ type: 'session.start' })
+      actor.send({ type: 'asr.final', text: '最终文本' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.context.transcript).toBe('最终文本')
+    })
+
+    it('should update transcript on asr.final in thinking', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+      actor.send({ type: 'asr.final', text: '最终文本' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.context.transcript).toBe('最终文本')
+    })
+  })
+
+  describe('INTERRUPTING event', () => {
+    it('should transition to listening on INTERRUPTING from speaking', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+      actor.send({ type: 'llm.complete', fullText: 'response' })
+      expect(actor.getSnapshot().value).toBe('speaking')
+      actor.send({ type: 'INTERRUPTING' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.value).toBe('listening')
+    })
+
+    it('should reset session on INTERRUPTING', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+      actor.send({ type: 'llm.complete', fullText: 'response' })
+      actor.send({ type: 'INTERRUPTING' })
+      const snapshot = actor.getSnapshot()
+      expect(snapshot.context.streamBuffer).toBe('')
+      expect(snapshot.context.turnId).toBe('')
+    })
+  })
+
+  describe('continuous conversation flow', () => {
+    it('should go listening -> thinking -> speaking -> listening', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+      expect(actor.getSnapshot().value).toBe('thinking')
+
+      actor.send({ type: 'llm.complete', fullText: 'response' })
+      expect(actor.getSnapshot().value).toBe('speaking')
+
+      actor.send({ type: 'tts.complete' })
+      expect(actor.getSnapshot().value).toBe('listening')
+    })
+
+    it('should allow multiple conversation cycles', () => {
+      actor.send({ type: 'SUBMIT_TEXT', text: 'first' })
+      actor.send({ type: 'llm.complete', fullText: 'first response' })
+      actor.send({ type: 'tts.complete' })
+      expect(actor.getSnapshot().value).toBe('listening')
+
+      actor.send({ type: 'audio.commit' })
+      actor.send({ type: 'llm.complete', fullText: 'second response' })
+      actor.send({ type: 'tts.complete' })
+      expect(actor.getSnapshot().value).toBe('listening')
+    })
   })
 })

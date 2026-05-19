@@ -3,6 +3,8 @@ export const CLIENT_EVENTS = {
   SESSION_STOP: 'session.stop',
   AUDIO_CHUNK_APPEND: 'audio.chunk.append',
   AUDIO_COMMIT: 'audio.commit',
+  AUDIO_START: 'audio.start',
+  TURN_CANCEL: 'turn.cancel',
   INTERRUPT_REQUEST: 'interrupt.request',
   VAD_START: 'vad.start',
   VAD_END: 'vad.end',

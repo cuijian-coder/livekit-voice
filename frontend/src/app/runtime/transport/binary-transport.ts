@@ -1,34 +1,57 @@
 import { wsClient } from './websocket-client'
-import { CLIENT_EVENTS } from './protocol'
 import { getLogger } from '@livekit-voice/shared/logger'
 
 const logger = getLogger()
 
-export interface BinaryTransportConfig {
-  maxChunkSize: number
-  enableCompression: boolean
-}
-
 export class BinaryTransport {
-  private audioChunks: Uint8Array[] = []
   private isActive = false
-  private currentTurnId: string | null = null
+  private currentTurnId = ''
+  private lastSeq = -1
 
-  startChunking(turnId: string): void {
-    this.audioChunks = []
+  startTurn(turnId: string): void {
     this.isActive = true
     this.currentTurnId = turnId
+    this.lastSeq = -1
     logger.debug('binaryTransport.start', { turnId })
   }
 
-  appendChunk(chunk: Uint8Array): void {
+  sendFrame(frame: { seq: number, pcm: Uint8Array }): void {
     if (!this.isActive) {
-      logger.warn('binaryTransport.append.ignored.not.active')
+      logger.warn('binaryTransport.send.ignored.not.active')
       return
     }
 
-    this.audioChunks.push(chunk)
-    logger.debug('binaryTransport.chunk.appended', { chunkSize: chunk.length, totalChunks: this.audioChunks.length })
+    this.lastSeq = frame.seq
+
+    // Build binary frame: [seq: uint32 LE][PCM: Int16[]]
+    const seqBuffer = new ArrayBuffer(4)
+    const seqView = new DataView(seqBuffer)
+    seqView.setUint32(0, frame.seq, true)  // little-endian
+
+    const seqArray = new Uint8Array(seqBuffer)
+    const frameData = this.concatArrays(seqArray, frame.pcm)
+
+    wsClient.sendBinary(frameData)
+    logger.debug('binaryTransport.sent', { seq: frame.seq, pcmSize: frame.pcm.length })
+  }
+
+  async flush(): Promise<void> {
+    // Wait for websocket bufferedAmount to be 0
+    let attempts = 0
+    const maxAttempts = 100
+
+    while (attempts < maxAttempts) {
+      // Get the underlying ws to check bufferedAmount
+      const bufferedAmount = (wsClient as any).ws?.bufferedAmount
+      if (bufferedAmount === 0 || bufferedAmount === undefined) {
+        logger.debug('binaryTransport.flush.done', { attempts })
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, 10))
+      attempts++
+    }
+
+    logger.warn('binaryTransport.flush.timeout', { attempts })
   }
 
   async commit(): Promise<void> {
@@ -37,24 +60,17 @@ export class BinaryTransport {
       return
     }
 
-    if (this.audioChunks.length === 0) {
-      logger.warn('binaryTransport.commit.no.chunks')
-      this.reset()
-      return
-    }
+    const finalSeq = this.lastSeq
+    logger.info('binaryTransport.committing', { turnId: this.currentTurnId, finalSeq })
 
-    const combined = this.combineChunks()
-    logger.info('binaryTransport.committing', { totalSize: combined.length, chunks: this.audioChunks.length })
+    wsClient.send({
+      type: 'audio.commit',
+      turnId: this.currentTurnId,
+      finalSeq
+    } as any)
 
-    try {
-      await this.sendAudioData(combined)
-      wsClient.send({ type: CLIENT_EVENTS.AUDIO_COMMIT })
-      logger.info('binaryTransport.commit.success')
-    } catch (err) {
-      logger.error('binaryTransport.commit.error', { err })
-    } finally {
-      this.reset()
-    }
+    logger.info('binaryTransport.commit.sent')
+    this.reset()
   }
 
   cancel(): void {
@@ -64,43 +80,17 @@ export class BinaryTransport {
     }
   }
 
-  private combineChunks(): Uint8Array {
-    const totalLength = this.audioChunks.reduce((sum, chunk) => sum + chunk.length, 0)
-    const result = new Uint8Array(totalLength)
-    let offset = 0
-
-    for (const chunk of this.audioChunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-
+  private concatArrays(a: Uint8Array, b: Uint8Array): Uint8Array {
+    const result = new Uint8Array(a.length + b.length)
+    result.set(a, 0)
+    result.set(b, a.length)
     return result
   }
 
-  private async sendAudioData(data: Uint8Array): Promise<void> {
-    const CHUNK_SIZE = 16384
-
-    if (data.length <= CHUNK_SIZE) {
-      wsClient.sendBinary(data)
-      return
-    }
-
-    let offset = 0
-    while (offset < data.length) {
-      const chunk = data.slice(offset, offset + CHUNK_SIZE)
-      wsClient.sendBinary(chunk)
-      offset += chunk.length
-
-      await new Promise((resolve) => setTimeout(resolve, 10))
-    }
-
-    logger.debug('binaryTransport.sent.multi.chunk', { totalChunks: Math.ceil(data.length / CHUNK_SIZE) })
-  }
-
   private reset(): void {
-    this.audioChunks = []
     this.isActive = false
-    this.currentTurnId = null
+    this.currentTurnId = ''
+    this.lastSeq = -1
   }
 }
 

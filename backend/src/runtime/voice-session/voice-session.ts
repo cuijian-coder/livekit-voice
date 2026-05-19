@@ -11,7 +11,9 @@ import { SessionEventBus } from '@livekit-voice/shared'
 import { nanoid } from 'nanoid'
 import { QwenAsrWorker } from '../../workers/asr/qwen-asr.worker.js'
 import { QwenLlmWorker } from '../../workers/llm/qwen-llm.worker.js'
-import { QwenTtsWorker } from '../../workers/tts/qwen-tts.worker.js'
+import { NlsGatewayTtsWorker } from '../../workers/tts/nls-gateway-tts.worker.js'
+import { AliyunStreamingTtsWorker } from '../../workers/tts/aliyun-streaming-tts.worker.js'
+import { getConfig } from '../../infra/config/config.js'
 
 const s = CONVERSATION_STATES
 
@@ -26,20 +28,31 @@ export class VoiceSession {
   private diagnostics: DiagnosticsCollector
   private actor: ReturnType<typeof createActor<typeof conversationMachine>>
   private audioBuffer: Buffer[] = []
+  private frameBuffer: Map<number, Buffer> = new Map()
   private currentTurnId = ''
+  private currentSeq = 0
   private _state: ConversationState = CONVERSATION_STATES.IDLE
   private abortController = new AbortController()
 
   private asrWorker = new QwenAsrWorker()
   private llmWorker = new QwenLlmWorker()
-  private ttsWorker = new QwenTtsWorker()
+  private asrFrameQueue: Buffer[] = []
+  private asrStreamController: AbortController | null = null
+  private asrStreamTask: Promise<void> | null = null
+  private ttsWorker = (() => {
+    const cfg = getConfig()
+    if (cfg.TTS_MODE === 'websocket') {
+      return new AliyunStreamingTtsWorker()
+    }
+    return new NlsGatewayTtsWorker()
+  })()
   private currentTranscript = ''
 
   constructor(ws: WebSocket, logger: Logger) {
     this.sessionId = nanoid(12)
     this.createdAt = Date.now()
     this.ws = ws
-    this.logger = logger
+    this.logger = logger.child({ sessionId: this.sessionId })
     this.eventBus = new SessionEventBus()
     this.playbackQueue = new PlaybackQueue()
     this.diagnostics = new DiagnosticsCollector()
@@ -58,7 +71,7 @@ export class VoiceSession {
     this.actor = createActor(conversationMachine as any, { input: ctx })
     this.actor.start()
 
-    this.actor.subscribe((snapshot: any) => {
+this.actor.subscribe((snapshot: any) => {
       const newState = snapshot.value as ConversationState
       if (newState !== this._state) {
         this.diagnostics.recordTransition(this._state, newState)
@@ -73,20 +86,24 @@ export class VoiceSession {
 
   private onStateChange(state: ConversationState): void {
     if (state === s.THINKING) {
+      this.logger.info({ sessionId: this.sessionId }, 'llm.will_start')
       this.runLlm().catch((err) => this.handleError('llm', err))
     }
   }
 
   private async runLlm(): Promise<void> {
     const signal = this.abortController.signal
-    if (signal.aborted) return
+    if (signal.aborted) {
+      this.logger.warn({ sessionId: this.sessionId }, 'llm.start.aborted')
+      return
+    }
 
-    this.logger.info({ sessionId: this.sessionId }, 'llm.started')
+    this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript }, 'llm.started')
     this.send({ type: SERVER_EVENTS.LLM_STARTED })
 
     try {
       let fullResponse = ''
-      for await (const token of this.llmWorker.stream(this.currentTranscript || '你好', signal)) {
+      for await (const token of this.llmWorker.stream(this.currentTranscript || '你好', signal, this.logger)) {
         if (signal.aborted) return
         fullResponse += token
         this.send({ type: SERVER_EVENTS.LLM_TOKEN, token })
@@ -111,7 +128,7 @@ export class VoiceSession {
     this.send({ type: SERVER_EVENTS.TTS_STARTED })
 
     try {
-      for await (const audioChunk of this.ttsWorker.stream(text, signal)) {
+      for await (const audioChunk of this.ttsWorker.stream(text, signal, this.logger)) {
         if (signal.aborted) return
         if (audioChunk.length === 0) continue
         this.sendBinary(audioChunk)
@@ -145,11 +162,11 @@ export class VoiceSession {
       case CLIENT_EVENTS.SESSION_START:
         this.handleSessionInit()
         break
-      case 'audio':
-        this.handleAudio(msg.data, msg.turnId)
+      case 'audio.start':
+        this.handleAudioStart(msg.turnId)
         break
-      case 'vad.end':
-        this.handleVadEnd()
+      case 'audio.commit':
+        this.handleAudioCommit(msg.turnId, msg.finalSeq)
         break
       case 'interrupt':
         this.handleInterrupt()
@@ -160,48 +177,170 @@ export class VoiceSession {
       case 'getDiagnostics':
         this.sendDiagnostics()
         break
+      case 'submit.text':
+        this.handleTextSubmit(msg.text)
+        break
       default:
         this.logger.warn({ sessionId: this.sessionId, type: msg.type }, 'unknown.message.type')
     }
   }
 
-  handleBinaryFrame(data: Buffer, turnId: string): void {
-    this.eventBus.emit('audio.chunk.received', data)
-    this.audioBuffer.push(data)
-    this.currentTurnId = turnId
-    this.logger.debug({ sessionId: this.sessionId, turnId, size: data.length }, 'audio.chunk.received')
+  handleBinaryFrame(pcmData: Buffer, seq: number): void {
+    this.frameBuffer.set(seq, pcmData)
+    this.currentSeq = seq
+
+    if (this.asrFrameQueue !== undefined) {
+      this.asrFrameQueue.push(pcmData)
+    }
+
+    this.logger.debug({ sessionId: this.sessionId, seq, size: pcmData.length }, 'audio.frame.received')
   }
 
   private handleSessionInit(): void {
+    this.actor.send({ type: 'START' })
+    this.send({ type: SERVER_EVENTS.SESSION_STARTED })
     this.sendStateUpdate()
     this.logger.info({ sessionId: this.sessionId }, 'session.established')
   }
 
-  private handleAudio(data: string, turnId: string): void {
-    const chunk = Buffer.from(data, 'base64')
-    this.handleBinaryFrame(chunk, turnId)
-  }
-
-  private handleVadEnd(): void {
-    if (this._state !== CONVERSATION_STATES.LISTENING) {
-      this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'vad.end.invalid.state')
+  private handleAudioStart(turnId: string): void {
+    if (this._state !== CONVERSATION_STATES.IDLE && this._state !== CONVERSATION_STATES.LISTENING) {
+      this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'audio.start.invalid.state')
       return
     }
-    this.actor.send({ type: 'VAD_END' })
-    this.eventBus.emit('vad.ended')
-    this.startTranscribing()
+    this.currentTurnId = turnId
+    this.currentSeq = 0
+    this.frameBuffer.clear()
+    this.asrFrameQueue = []
+    this.actor.send({ type: 'START' })
+    this.send({ type: SERVER_EVENTS.SESSION_STARTED })
+    this.sendStateUpdate()
+    this.logger.info({ sessionId: this.sessionId, turnId }, 'audio.start')
+
+    this.startStreamingAsr()
   }
 
-  private async startTranscribing(): Promise<void> {
-    if (this.audioBuffer.length === 0) {
+  private startStreamingAsr(): void {
+    if (this.asrStreamTask) {
+      return
+    }
+
+    this.asrStreamController = new AbortController()
+    const signal = this.asrStreamController.signal
+
+    const audioStream = this.createFrameStream()
+
+    this.asrStreamTask = (async () => {
+      try {
+        for await (const result of this.asrWorker.stream(audioStream, signal, this.logger)) {
+          if (signal.aborted) break
+          if (!result.isFinal) {
+            this.send({
+              type: SERVER_EVENTS.ASR_PARTIAL,
+              turnId: this.currentTurnId,
+              seq: this.currentSeq,
+              text: result.text
+            })
+          } else {
+            this.send({
+              type: SERVER_EVENTS.ASR_FINAL,
+              turnId: this.currentTurnId,
+              text: result.text
+            })
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          this.logger.error({ sessionId: this.sessionId, err }, 'asr.stream.error')
+        }
+      }
+      this.asrStreamTask = null
+    })()
+
+    this.logger.debug({ sessionId: this.sessionId }, 'asr.stream.started')
+  }
+
+  private createFrameStream(): AsyncIterable<Buffer> {
+    return {
+      [Symbol.asyncIterator]: () => {
+        let index = 0
+        return {
+          next: async (): Promise<IteratorResult<Buffer>> => {
+            while (this.asrFrameQueue.length === 0) {
+              if (this.asrStreamController?.signal.aborted) {
+                return { done: true, value: Buffer.alloc(0) }
+              }
+              await new Promise(resolve => setTimeout(resolve, 10))
+            }
+            const frame = this.asrFrameQueue.shift()!
+            if (frame.length === 0 && this.asrFrameQueue.length === 0) {
+              return { done: true, value: Buffer.alloc(0) }
+            }
+            return { done: false, value: frame }
+          }
+        }
+      }
+    }
+  }
+
+  private stopStreamingAsr(): void {
+    if (this.asrStreamController) {
+      this.asrStreamController.abort()
+      this.asrStreamController = null
+    }
+    this.asrFrameQueue = []
+    this.asrStreamTask = null
+  }
+
+  private async handleAudioCommit(turnId: string, finalSeq: number): Promise<void> {
+    if (this._state !== CONVERSATION_STATES.LISTENING) {
+      this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'audio.commit.invalid.state')
+      return
+    }
+    if (turnId !== this.currentTurnId) {
+      this.logger.warn({ sessionId: this.sessionId, turnId, expected: this.currentTurnId }, 'audio.commit.turnId.mismatch')
+      return
+    }
+
+    this.logger.info({ sessionId: this.sessionId, turnId, finalSeq }, 'audio.commit.received')
+
+    for (let i = 0; i <= finalSeq; i++) {
+      if (!this.frameBuffer.has(i)) {
+        this.logger.warn({ sessionId: this.sessionId, missingSeq: i }, 'audio.commit.missing.seq')
+      }
+    }
+
+    this.frameBuffer.clear()
+
+    this.actor.send({ type: 'VAD_END' })
+    this.eventBus.emit('vad.ended')
+
+    this.asrFrameQueue.push(Buffer.alloc(0))
+
+    if (this.asrStreamTask) {
+      await this.asrStreamTask
+    }
+
+    this.logger.info({ sessionId: this.sessionId }, 'asr.stream.finalized')
+    this.actor.send({ type: 'ASR_COMPLETE', text: '' })
+    this.stopStreamingAsr()
+  }
+
+  private handleTextSubmit(text: string): void {
+    if (!text || this.abortController.signal.aborted) return
+    this.currentTranscript = text
+    this.send({ type: SERVER_EVENTS.ASR_FINAL, text })
+    this.actor.send({ type: 'ASR_COMPLETE', text })
+  }
+
+  private async startTranscribingWithAudio(audioData: Buffer): Promise<void> {
+    if (audioData.length === 0) {
       this.logger.warn({ sessionId: this.sessionId }, 'no.audio.to.transcribe')
       this.actor.send({ type: 'ASR_COMPLETE', text: '' })
       return
     }
 
     const signal = this.abortController.signal
-    const audioData = Buffer.concat(this.audioBuffer)
-    this.audioBuffer = []
 
     this.logger.info({ sessionId: this.sessionId, audioBytes: audioData.length }, 'asr.started')
 
@@ -211,7 +350,7 @@ export class VoiceSession {
       })()
 
       let finalText = ''
-      for await (const result of this.asrWorker.stream(audioStream, signal)) {
+      for await (const result of this.asrWorker.stream(audioStream, signal, this.logger)) {
         if (signal.aborted) return
         if (!result.isFinal) {
           this.send({ type: SERVER_EVENTS.ASR_PARTIAL, text: result.text })
@@ -221,11 +360,16 @@ export class VoiceSession {
         }
       }
 
-      if (signal.aborted) return
+      if (signal.aborted) {
+        this.logger.warn({ sessionId: this.sessionId }, 'asr.aborted.before.complete')
+        return
+      }
+      this.logger.info({ sessionId: this.sessionId, finalText }, 'asr.complete.sending')
       this.actor.send({ type: 'ASR_COMPLETE', text: finalText })
       this.currentTranscript = finalText
       this.logger.info({ sessionId: this.sessionId, text: finalText }, 'asr.complete')
     } catch (err) {
+      this.logger.error({ sessionId: this.sessionId, err }, 'asr.for_await_error')
       if ((err as Error).name === 'AbortError') return
       this.handleError('asr', err as Error)
       this.actor.send({ type: 'ERROR', error: (err as Error).message })
@@ -238,6 +382,7 @@ export class VoiceSession {
     this.abortController = new AbortController()
     this.playbackQueue.clear()
     this.audioBuffer = []
+    this.frameBuffer.clear()
     this.diagnostics.recordInterrupt(this.currentTurnId, 'user')
     this.actor.send({ type: 'INTERRUPT' })
     this.eventBus.emit('interrupt.detected', 'user')
@@ -271,6 +416,7 @@ export class VoiceSession {
     this.actor.send({ type: 'RECOVER' })
     this._state = CONVERSATION_STATES.IDLE
     this.audioBuffer = []
+    this.frameBuffer.clear()
     this.diagnostics.resetLatency()
   }
 
@@ -302,6 +448,7 @@ export class VoiceSession {
     this.eventBus.removeAllListeners()
     this.playbackQueue.clear()
     this.audioBuffer = []
+    this.frameBuffer.clear()
     this.abortController.abort()
   }
 }

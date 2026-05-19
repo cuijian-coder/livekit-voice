@@ -1,5 +1,12 @@
 import { ChatLayout } from './layout/ChatLayout';
 import { uiStore } from './state/uiStore';
+import { wsClient, messageRouter } from './runtime/transport';
+import { ttsPlayback } from './runtime/audio/playback';
+import { utteranceManager } from './runtime/audio/utterance-manager';
+import { voiceActor } from './voice/providers/voice-provider';
+import { getLogger } from '@livekit-voice/shared/logger';
+
+const logger = getLogger()
 
 export class App {
   private root: HTMLElement;
@@ -26,5 +33,32 @@ export class App {
   private mount(): void {
     this.root.innerHTML = '';
     this.root.appendChild(this.chatLayout.getElement());
+
+    ttsPlayback.init();
+
+    wsClient.onMessage(msg => messageRouter.route(msg));
+    wsClient.onBinary(data => {
+      const state = voiceActor.getSnapshot().value;
+      if (state === 'speaking') {
+        ttsPlayback.onChunk(data);
+      }
+    });
+
+    utteranceManager.setOnInterruptedCallback(() => {
+      voiceActor.send({ type: 'INTERRUPTING' } as any);
+    });
+
+    wsClient.connect()
+      .then(() => {
+        logger.info('transport.connected');
+        messageRouter.start();
+        // Send session.start for connection lifecycle
+        wsClient.send({
+          type: 'session.start',
+          sampleRate: 16000,
+          codec: 'pcm16'
+        } as any)
+      })
+      .catch(err => logger.error('transport.connect.failed', { err }));
   }
 }
