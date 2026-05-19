@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import websocket from '@fastify/websocket'
+import { WebSocketServer, WebSocket } from 'ws'
 import cors from '@fastify/cors'
 import { GatewayServer } from './gateway/websocket/server.js'
 import { SessionManager } from './runtime/voice-session/session-manager.js'
@@ -26,27 +26,31 @@ export function buildApp() {
   const gateway = new GatewayServer(sessionManager, logger)
 
   app.register(cors, { origin: true })
-  app.register(websocket)
 
   app.get('/health', async () => ({ status: 'ok', sessions: sessionManager.size }))
 
-  app.get('/ws', { websocket: true }, (socket: any) => {
-    gateway.handleConnection(socket as any)
-  })
-
-  return { app, sessionManager, gateway, logger }
+  return { app, sessionManager, gateway, logger, config }
 }
 
 export async function startServer() {
-  const config = getConfig()
-  const { app, logger } = buildApp()
+  const { app, logger, config, gateway } = buildApp()
 
-  try {
-    await app.listen({ port: config.PORT, host: config.HOST })
-    logger.info({ port: config.PORT, host: config.HOST }, 'server.started')
-    return app
-  } catch (err) {
-    logger.error({ err }, 'server.start.failed')
-    throw err
-  }
+  const wss = new WebSocketServer({ noServer: true })
+
+  app.server.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url ?? '/', 'http://localhost').pathname
+    if (pathname === '/ws') {
+      wss.handleUpgrade(request, socket, head, (ws: WebSocket) => {
+        logger.debug({ pathname }, 'ws.upgrade.accepted')
+        gateway.handleConnection(ws)
+      })
+    } else {
+      socket.destroy()
+    }
+  })
+
+  await app.listen({ port: config.PORT, host: config.HOST })
+
+  logger.info({ port: config.PORT, host: config.HOST }, 'server.started')
+  return { app, logger }
 }

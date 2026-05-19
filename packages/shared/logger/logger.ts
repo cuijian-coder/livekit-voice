@@ -21,10 +21,12 @@ export class Logger {
 
     this.buffer.add(entry)
 
-    const prefix = `[${event}]`
-    if (level === 'error') console.error(prefix, data)
-    else if (level === 'warn') console.warn(prefix, data)
-    else console.log(prefix, data)
+    const json = JSON.stringify(entry)
+    if (level === 'error') {
+      console.error(json)
+    } else {
+      console.log(json)
+    }
   }
 
   debug(event: string, data?: unknown) { this.log('debug', event, data) }

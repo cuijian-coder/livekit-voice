@@ -22,15 +22,24 @@ export class GatewayServer {
 
     ws.on('message', (data: Buffer | string, isBinary: boolean) => {
       try {
+        this.logger.debug({ sessionId: session.sessionId, isBinary, size: typeof data === 'string' ? data.length : data.length }, 'ws.message.received')
         const buf = typeof data === 'string' ? Buffer.from(data) : data
         if (isBinary) {
-          if (isValidBinaryFrame(buf)) {
-            session.handleBinaryFrame(buf, session.turnId)
-          } else {
-            this.logger.warn({ sessionId: session.sessionId, size: buf.length }, 'binary.frame.too.large')
+          // Format: [seq: uint32 (4 bytes, little-endian)][PCM: Int16[]]
+          if (buf.length < 5) {
+            this.logger.warn({ sessionId: session.sessionId, size: buf.length }, 'binary.frame.too.small')
+            return
           }
+          const seq = buf.readUInt32LE(0)
+          const pcmData = buf.slice(4)
+          if (!isValidBinaryFrame(pcmData)) {
+            this.logger.warn({ sessionId: session.sessionId, size: pcmData.length }, 'binary.frame.too.large')
+            return
+          }
+          session.handleBinaryFrame(pcmData, seq)
         } else {
           const msg = parseMessage(buf)
+          this.logger.debug({ sessionId: session.sessionId, type: msg.type }, 'ws.message.parsed')
           session.handleMessage(msg)
         }
       } catch (err) {

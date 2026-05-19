@@ -3,7 +3,7 @@ import { chatStore } from '../state/chatStore';
 import { voiceActor } from '../voice/providers/voice-provider';
 import { selectActionButton } from '../voice/selectors/actionButton.selector';
 import { getButtonConfig } from '../voice/ui/button-config';
-import { audioRecorder } from '../services/audio-recorder';
+import { audioRecorder } from '../runtime/audio/recorder';
 
 export class InputBar {
   private element: HTMLElement;
@@ -53,12 +53,26 @@ export class InputBar {
 
   private onStateChange(): void {
     const snapshot = voiceActor.getSnapshot()
-    const isRecording = snapshot.value === 'listening'
+    const state = snapshot.value as string
+    const isRecording = state === 'listening'
+    const isTranscribing = state === 'transcribing'
+
+    console.log('[InputBar] onStateChange:', state, 'isRecording:', isRecording)
 
     if (isRecording) {
+      console.log('[InputBar] Setting audio level callback')
       audioRecorder.setAudioLevelCallback((level) => {
+        console.log('[InputBar] Audio level:', level)
         this.updateRecordingVisualization(level)
       })
+    }
+
+    // 显示实时 ASR 部分结果
+    if (isTranscribing) {
+      const partialTranscript = snapshot.context.partialTranscript
+      if (partialTranscript) {
+        this.textarea.value = partialTranscript
+      }
     }
   }
 
@@ -73,8 +87,18 @@ export class InputBar {
     const minHeight = 4   // 最小高度（4个点）
     const maxHeight = 16  // 最大高度
     
-    // 使用正弦波产生波浪效果
-    // 音量越大，振幅越大；没声音时逐渐变回4个点
+    // level=0 表示无人声，显示4个水平点
+    if (level === 0) {
+      bars.forEach((bar) => {
+        if (bar instanceof SVGRectElement) {
+          bar.setAttribute('height', String(minHeight))
+          bar.setAttribute('y', String((20 - minHeight) / 2))
+        }
+      })
+      return
+    }
+    
+    // 有声音，使用正弦波产生波浪效果
     const normalized = level / 100
     
     // 四个点的相位偏移，产生波浪摆动效果

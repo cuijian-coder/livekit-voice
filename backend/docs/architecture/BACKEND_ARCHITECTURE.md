@@ -54,7 +54,9 @@ server/
 │   │   ├── llm/                    # 流式 LLM
 │   │   │   └── qwen-llm.worker.ts
 │   │   └── tts/                    # 流式 TTS
-│   │       └── qwen-tts.worker.ts
+│   │       ├── qwen-tts.worker.ts        # DashScope CosyVoice (预留)
+│   │       ├── nls-gateway-tts.worker.ts  # NLS HTTP 异步轮询
+│   │       └── aliyun-streaming-tts.worker.ts  # NLS WebSocket 流式
 │   │
 │   ├── shared/                     # 共享模块
 │   │   ├── constants.ts            # 规范常量

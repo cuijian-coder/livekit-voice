@@ -1,36 +1,38 @@
+import pino from 'pino'
 import { startServer } from './app.js'
 import { getConfig } from './infra/config/config.js'
 
 async function main() {
   const config = getConfig()
+  const logger = pino({ level: config.LOG_LEVEL })
 
   process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err)
+    logger.error({ err }, 'uncaught.exception')
     process.exit(1)
   })
 
   process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason)
+    logger.error({ reason }, 'unhandled.rejection')
     process.exit(1)
   })
 
   process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down...')
+    logger.info('SIGTERM received, shutting down...')
     process.exit(0)
   })
 
   process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down...')
+    logger.info('SIGINT received, shutting down...')
     process.exit(0)
   })
 
-  await startServer()
-  console.log(`🚀 Server running on http://${config.HOST}:${config.PORT}`)
-  console.log(`📊 Health: http://${config.HOST}:${config.PORT}/health`)
-  console.log(`🔌 WebSocket: ws://${config.HOST}:${config.PORT}/ws`)
+  const { app, logger: serverLogger } = await startServer()
+  serverLogger.info(`🚀 Server running on http://${config.HOST}:${config.PORT}`)
+  serverLogger.info(`📊 Health: http://${config.HOST}:${config.PORT}/health`)
+  serverLogger.info(`🔌 WebSocket: ws://${config.HOST}:${config.PORT}/ws`)
 }
 
 main().catch((err) => {
-  console.error('Failed to start server:', err)
+  pino().error({ err }, 'Failed to start server')
   process.exit(1)
 })
