@@ -11,7 +11,6 @@ export type {
   TtsStarted,
   TtsChunk,
   TtsComplete,
-  Diagnostics,
   StateUpdate,
   SessionEstablished,
   SessionError,

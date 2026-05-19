@@ -2,6 +2,7 @@ import { createActor } from 'xstate';
 import { voiceMachine } from '../machine';
 import { getLogger } from '@livekit-voice/shared/logger';
 import { validateVoiceState, validateTransition, timeline } from '../../core/diagnostics';
+import { diagnosticsCollector } from '../../runtime/debug-provider';
 
 const logger = getLogger();
 
@@ -20,6 +21,18 @@ voiceActor.subscribe((snapshot: any) => {
     }
 
     timeline.add('transition', { from: prevState, to: state })
+
+    diagnosticsCollector.add({
+      source: 'conversation.machine',
+      type: 'state.entered',
+      metadata: { state, from: prevState },
+      turnId: snapshot.context.turnId
+    })
+
+    diagnosticsCollector.updateState({
+      conversation: { state, turnId: snapshot.context.turnId || '' }
+    })
+
     prevState = state
   }
 

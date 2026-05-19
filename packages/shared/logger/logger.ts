@@ -1,8 +1,8 @@
-import { LogBuffer } from './buffer'
+import { RingBuffer } from '../ring-buffer'
 import type { LogEvent, LogLevel } from './types'
 
 export class Logger {
-  private buffer = new LogBuffer()
+  private buffer = new RingBuffer<LogEvent>(200)
   private requestId: string | undefined
 
   setRequestId(id: string) {
@@ -19,7 +19,7 @@ export class Logger {
       data
     }
 
-    this.buffer.add(entry)
+    this.buffer.push(entry)
 
     const json = JSON.stringify(entry)
     if (level === 'error') {
@@ -34,7 +34,7 @@ export class Logger {
   warn(event: string, data?: unknown) { this.log('warn', event, data) }
   error(event: string, data?: unknown) { this.log('error', event, data) }
 
-  getLogs() { return this.buffer.getAll() }
+  getLogs() { return this.buffer.toArray() }
   clear() { this.buffer.clear() }
 }
 

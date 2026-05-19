@@ -6,6 +6,8 @@ import { utteranceManager } from './runtime/audio/utterance-manager';
 import { voiceActor } from './voice/providers/voice-provider';
 import { getLogger } from '@livekit-voice/shared/logger';
 
+import './runtime/debug-provider'
+
 const logger = getLogger()
 
 export class App {

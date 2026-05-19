@@ -6,7 +6,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@livekit-voice/shared/protocol'
 import type { ConversationState } from '@livekit-voice/shared/constants'
 import { conversationMachine } from '../state-machine/conversation-machine.js'
 import { PlaybackQueue } from '../playback/playback-queue.js'
-import { DiagnosticsCollector } from '../diagnostics/diagnostics-collector.js'
+import type { BackendDiagnosticsCollector } from '../diagnostics-collector.js'
 import { SessionEventBus } from '@livekit-voice/shared'
 import { nanoid } from 'nanoid'
 import { QwenAsrWorker } from '../../workers/asr/qwen-asr.worker.js'
@@ -26,7 +26,7 @@ export class VoiceSession {
   private logger: Logger
   private eventBus: SessionEventBus
   private playbackQueue: PlaybackQueue
-  private diagnostics: DiagnosticsCollector
+  private diagnostics: BackendDiagnosticsCollector
   private actor: ReturnType<typeof createActor<typeof conversationMachine>>
   private audioBuffer: Buffer[] = []
   private frameBuffer: Map<number, Buffer> = new Map()
@@ -49,14 +49,14 @@ export class VoiceSession {
   })()
   private currentTranscript = ''
 
-  constructor(ws: WebSocket, logger: Logger) {
+  constructor(ws: WebSocket, logger: Logger, diagnostics: BackendDiagnosticsCollector) {
     this.sessionId = nanoid(12)
     this.createdAt = Date.now()
     this.ws = ws
     this.logger = logger.child({ sessionId: this.sessionId })
     this.eventBus = new SessionEventBus()
     this.playbackQueue = new PlaybackQueue()
-    this.diagnostics = new DiagnosticsCollector()
+    this.diagnostics = diagnostics
 
     const ctx = {
       sessionId: this.sessionId,
@@ -75,9 +75,15 @@ export class VoiceSession {
 this.actor.subscribe((snapshot: any) => {
       const newState = snapshot.value as ConversationState
       if (newState !== this._state) {
-        this.diagnostics.recordTransition(this._state, newState)
+        const fromState = this._state
+        this.diagnostics.add({
+          source: 'conversation.machine',
+          type: 'state.entered',
+          turnId: this.currentTurnId || undefined,
+          metadata: { state: newState, from: fromState }
+        })
         this._state = newState
-        this.logger.debug({ sessionId: this.sessionId, from: this._state, to: newState }, 'state.transition')
+        this.logger.debug({ sessionId: this.sessionId, from: fromState, to: newState }, 'state.transition')
         this.onStateChange(newState)
       }
     })
@@ -103,16 +109,41 @@ this.actor.subscribe((snapshot: any) => {
     this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript }, 'llm.started')
     this.send({ type: SERVER_EVENTS.LLM_STARTED })
 
+    this.diagnostics.add({
+      source: 'llm',
+      type: 'stream.started',
+      turnId: this.currentTurnId || undefined
+    })
+
+    const llmStartTime = Date.now()
+    let tokenCount = 0
+
     try {
       let fullResponse = ''
       for await (const token of this.llmWorker.stream(this.currentTranscript || '你好', signal, this.logger)) {
         if (signal.aborted) return
         fullResponse += token
+        tokenCount++
         this.send({ type: SERVER_EVENTS.LLM_TOKEN, token })
-        this.diagnostics.recordLlmToken(token)
+
+        if (tokenCount === 1) {
+          this.diagnostics.add({
+            source: 'llm',
+            type: 'first_token.received',
+            durationMs: Date.now() - llmStartTime
+          })
+        }
       }
 
       if (signal.aborted) return
+
+      this.diagnostics.add({
+        source: 'llm',
+        type: 'stream.completed',
+        durationMs: Date.now() - llmStartTime,
+        metadata: { totalTokens: tokenCount }
+      })
+
       this.logger.info({ sessionId: this.sessionId, responseLength: fullResponse.length }, 'llm.complete')
       this.actor.send({ type: 'LLM_COMPLETE' })
       await this.runTts(fullResponse)
@@ -129,15 +160,35 @@ this.actor.subscribe((snapshot: any) => {
     this.logger.info({ sessionId: this.sessionId, textLength: text.length }, 'tts.started')
     this.send({ type: SERVER_EVENTS.TTS_STARTED })
 
+    this.diagnostics.add({
+      source: 'tts',
+      type: 'stream.started',
+      turnId: this.currentTurnId || undefined
+    })
+
+    this.diagnostics.updateState({ audio: { playing: true } })
+
     try {
       for await (const audioChunk of this.ttsWorker.stream(text, signal, this.logger)) {
         if (signal.aborted) return
         if (audioChunk.length === 0) continue
         this.sendBinary(audioChunk)
-        this.diagnostics.recordTtsChunk(audioChunk.length)
+        this.diagnostics.add({
+          source: 'tts',
+          type: 'chunk.received',
+          metadata: { size: audioChunk.length }
+        })
       }
 
       if (signal.aborted) return
+
+      this.diagnostics.add({
+        source: 'tts',
+        type: 'stream.completed'
+      })
+
+      this.diagnostics.updateState({ audio: { playing: false } })
+
       this.logger.info({ sessionId: this.sessionId }, 'tts.complete')
       this.actor.send({ type: 'SPEAK_COMPLETE' })
       this.sendPlaybackCompleted(false)
@@ -386,7 +437,12 @@ this.actor.subscribe((snapshot: any) => {
     this.playbackQueue.clear()
     this.audioBuffer = []
     this.frameBuffer.clear()
-    this.diagnostics.recordInterrupt(this.currentTurnId, 'user')
+    this.diagnostics.add({
+      source: 'conversation.machine',
+      type: 'interrupt.received',
+      turnId: this.currentTurnId || undefined,
+      metadata: { reason: 'user' }
+    })
     this.actor.send({ type: 'INTERRUPT' })
     this.eventBus.emit('interrupt.detected', 'user')
     this.sendPlaybackCompleted(true)
@@ -397,7 +453,7 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   private sendDiagnostics(): void {
-    this.send({ type: 'diagnostics', metrics: this.diagnostics.getSnapshot() })
+    this.send({ type: 'diagnostics', metrics: this.diagnostics.snapshot() })
   }
 
   private sendStateUpdate(): void {
@@ -405,7 +461,11 @@ this.actor.subscribe((snapshot: any) => {
   }
 
   handleError(worker: 'asr' | 'llm' | 'tts', error: Error): void {
-    this.diagnostics.recordStreamError(worker, error.message)
+    this.diagnostics.add({
+      source: worker,
+      type: 'stream.error',
+      metadata: { error: error.message }
+    })
     this.logger.error({ sessionId: this.sessionId, worker, error: error.message }, 'stream.error')
     this.playbackQueue.clear()
     this.actor.send({ type: 'ERROR', error: error.message })
@@ -420,7 +480,6 @@ this.actor.subscribe((snapshot: any) => {
     this._state = CONVERSATION_STATES.IDLE
     this.audioBuffer = []
     this.frameBuffer.clear()
-    this.diagnostics.resetLatency()
   }
 
   send(msg: any): void {

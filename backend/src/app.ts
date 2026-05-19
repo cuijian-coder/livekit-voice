@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import cors from '@fastify/cors'
 import { GatewayServer } from './gateway/websocket/server.js'
 import { SessionManager } from './runtime/voice-session/session-manager.js'
+import { registerDebugEndpoint } from './gateway/debug-endpoint.js'
 import { getConfig } from './infra/config/config.js'
 import pino from 'pino'
 
@@ -28,6 +29,8 @@ export function buildApp() {
   app.register(cors, { origin: true })
 
   app.get('/health', async () => ({ status: 'ok', sessions: sessionManager.size }))
+
+  registerDebugEndpoint(app, sessionManager.diagnostics)
 
   return { app, sessionManager, gateway, logger, config }
 }

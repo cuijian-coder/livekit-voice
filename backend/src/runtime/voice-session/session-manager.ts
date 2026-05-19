@@ -1,18 +1,21 @@
 import type { WebSocket } from 'ws'
 import type { Logger } from 'pino'
 import { VoiceSession } from './voice-session.js'
+import { BackendDiagnosticsCollector } from '../diagnostics-collector.js'
 
 export class SessionManager {
   private sessions: Map<string, VoiceSession> = new Map()
   private wsToSession: Map<string, string> = new Map()
   private logger: Logger
+  readonly diagnostics: BackendDiagnosticsCollector
 
   constructor(logger: Logger) {
     this.logger = logger
+    this.diagnostics = new BackendDiagnosticsCollector()
   }
 
   create(ws: WebSocket): VoiceSession {
-    const session = new VoiceSession(ws, this.logger)
+    const session = new VoiceSession(ws, this.logger, this.diagnostics)
     this.sessions.set(session.sessionId, session)
     this.wsToSession.set((ws as any)._socket?.remoteAddress ?? session.sessionId, session.sessionId)
     this.logger.debug({ sessionId: session.sessionId }, 'session.registered')
