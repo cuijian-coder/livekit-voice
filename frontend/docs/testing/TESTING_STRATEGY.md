@@ -7,15 +7,15 @@
 ## 测试金字塔
 
 ```
-         ┌─────────────────────────────────────┐
-         │     E2E Tests (Browser Manual)      │  ← 手动测试
-         ├─────────────────────────────────────┤
-         │       Integration Tests             │  ← XState Actor
-         ├─────────────────────────────────────┤
-         │         Unit Tests                  │  ← Vitest
-         ├─────────────────────────────────────┤
-         │          Lint + TypeCheck           │  ← CI
-         └─────────────────────────────────────┘
+          ┌─────────────────────────────────────┐
+          │     E2E Tests (Browser Manual)      │  ← 手动测试
+          ├─────────────────────────────────────┤
+          │       Integration Tests             │  ← XState Actor
+          ├─────────────────────────────────────┤
+          │         Unit Tests                  │  ← Vitest
+          ├─────────────────────────────────────┤
+          │          Lint + TypeCheck           │  ← CI
+          └─────────────────────────────────────┘
 ```
 
 ## 测试框架
@@ -33,10 +33,11 @@
 | Logger | buffer.test.ts, logger.test.ts | 15 | ✅ |
 | Diagnostics | invariant.test.ts, validation.test.ts, timeline.test.ts | 38 | ✅ |
 | Streaming | streaming.test.ts | 6 | ✅ |
-| Voice Machine | voice-context.test.ts, voice-events.test.ts, voice-machine.test.ts | 41 | ✅ |
+| SpeechDetector | speech-detector.test.ts | 17 | ✅ |
+| Voice Machine | voice-context.test.ts, voice-events.test.ts, voice-machine.test.ts | 54 | ✅ |
 | Selectors | actionButton.selector.test.ts, voiceStatus.selector.test.ts, capability.selector.test.ts, animation.selector.test.ts | 40 | ✅ |
-| Utils | id.test.ts, time.test.ts | 20 | ✅ |
-| **总计** | **15 个文件** | **160** | **100% 通过** |
+| Utils | id.test.ts, time.test.ts | 16 | ✅ |
+| **总计** | **16 个文件** | **186** | **100% 通过** |
 
 ### 目录结构
 
@@ -50,7 +51,13 @@ src/app/
 │       ├── invariant.test.ts     # 6 tests
 │       ├── validation.test.ts    # 22 tests
 │       └── timeline.test.ts      # 10 tests
+├── runtime/audio/
+│   └── speech-detector.test.ts   # 17 tests (新增)
 ├── voice/
+│   ├── machine/
+│   │   ├── voice-context.test.ts
+│   │   ├── voice-events.test.ts
+│   │   └── voice-machine.test.ts  # 26 tests (新增连续对话测试)
 │   └── selectors/
 │       ├── actionButton.selector.test.ts   # 10 tests
 │       ├── voiceStatus.selector.test.ts    # 6 tests
@@ -60,92 +67,89 @@ src/app/
 │   └── streaming.test.ts        # 6 tests
 └── utils/
     ├── id.test.ts               # 6 tests
-    └── time.test.ts             # 14 tests
+    └── time.test.ts             # 10 tests
 ```
 
 ## 测试命令
 
 ```bash
 # 运行所有测试 (单次)
-npm run test:run
+pnpm test:run
 
 # Watch 模式
-npm run test
+pnpm test
 
 # 类型检查
-npx tsc --noEmit
+pnpm typecheck
 
 # 代码规范
-npm run lint
+pnpm lint
 ```
 
-## 测试示例
+## 新增测试场景
 
-### 1. Logger 测试
+### SpeechDetector 测试
 
 ```typescript
-describe('Logger', () => {
-  it('should add log entry with correct level', () => {
-    logger.info('test.event', { foo: 'bar' });
-    const logs = logger.getLogs();
-    expect(logs).toHaveLength(1);
-    expect(logs[0].level).toBe('info');
-    expect(logs[0].event).toBe('test.event');
-  });
-});
+describe('SpeechDetector', () => {
+  it('should transition to SPEAKING when energy exceeds threshold', () => {
+    const detector = new SpeechDetector()
+    const speechData = createSpeechData(128)
+    const result = detector.onFrame(speechData)
+    expect(result).toBe('SPEAKING')
+  })
+
+  it('should transition to POSSIBLE_END after silence timeout', () => {
+    vi.useFakeTimers()
+    const detector = new SpeechDetector({
+      silenceTimeoutMs: 100,
+      minSpeechDurationMs: 50,
+    })
+    // ... test silence timeout
+    vi.useRealTimers()
+  })
+
+  it('should transition to INTERRUPTING when user speaks during assistant', () => {
+    const detector = new SpeechDetector()
+    detector.setAssistantSpeaking(true)
+    const speechData = createSpeechData(128)
+    const result = detector.onFrame(speechData)
+    expect(result).toBe('INTERRUPTING')
+  })
+})
 ```
 
-### 2. State Machine 测试
+### Voice Machine 连续对话测试
 
 ```typescript
-describe('voiceMachine', () => {
-  it('should transition to listening on START_RECORDING', () => {
-    actor.send({ type: 'START_RECORDING' });
-    expect(actor.getSnapshot().value).toBe('listening');
-  });
+describe('continuous conversation flow', () => {
+  it('should go listening -> thinking -> speaking -> listening', () => {
+    actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+    expect(actor.getSnapshot().value).toBe('thinking')
 
-  it('should transition to thinking on STOP_RECORDING', () => {
-    actor.send({ type: 'START_RECORDING' });
-    actor.send({ type: 'STOP_RECORDING' });
-    expect(actor.getSnapshot().value).toBe('thinking');
-  });
-});
-```
+    actor.send({ type: 'llm.complete', fullText: 'response' })
+    expect(actor.getSnapshot().value).toBe('speaking')
 
-### 3. Selector 测试
+    actor.send({ type: 'tts.complete' })
+    expect(actor.getSnapshot().value).toBe('listening')  // 不再是 idle
+  })
 
-```typescript
-describe('selectActionButton', () => {
-  it('should return record button in idle state', () => {
-    const snapshot = createSnapshot('idle');
-    const result = selectActionButton(snapshot, false);
-    expect(result.semantic).toBe('record');
-  });
+  it('should allow multiple conversation cycles', () => {
+    // ... 测试多轮对话
+  })
+})
 
-  it('should return stop-recording in listening state', () => {
-    const snapshot = createSnapshot('listening');
-    const result = selectActionButton(snapshot, false);
-    expect(result.semantic).toBe('stop-recording');
-  });
-});
-```
+describe('INTERRUPTING event', () => {
+  it('should transition to listening on INTERRUPTING from speaking', () => {
+    actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
+    actor.send({ type: 'llm.complete', fullText: 'response' })
+    expect(actor.getSnapshot().value).toBe('speaking')
 
-### 4. Validation 测试
-
-```typescript
-describe('validateVoiceState', () => {
-  it('should pass for idle state', () => {
-    const snapshot = createSnapshot('idle', { requestId: 'req-123' });
-    const result = validateVoiceState(snapshot as any);
-    expect(result.valid).toBe(true);
-  });
-
-  it('should fail when requestId is missing', () => {
-    const snapshot = createSnapshot('idle', { requestId: '' });
-    const result = validateVoiceState(snapshot as any);
-    expect(result.valid).toBe(false);
-  });
-});
+    actor.send({ type: 'INTERRUPTING' })
+    expect(actor.getSnapshot().value).toBe('listening')
+    expect(actor.getSnapshot().context.streamBuffer).toBe('')  // reset
+  })
+})
 ```
 
 ## CI 集成
@@ -163,10 +167,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm run lint
-      - run: npm run test:run
+      - run: pnpm ci
+      - run: pnpm --filter frontend run typecheck
+      - run: pnpm --filter frontend run lint
+      - run: pnpm --filter frontend run test:run
+      - run: pnpm --filter backend run test:run
 ```
 
 ## 测试原则
@@ -175,7 +180,7 @@ jobs:
 
 ```typescript
 // ✅ Good - 测试行为
-it('should transition to listening on START_RECORDING')
+it('should transition to listening on session.start')
 
 // ❌ Bad - 测试实现细节
 it('should call assign() with requestId')

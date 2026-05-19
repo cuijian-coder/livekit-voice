@@ -42,19 +42,22 @@ LiveKit Voice Chat Backend
 
 ## 当前阶段
 
-**Phase 1: 实时语音运行时**
+**Phase 1: 实时语音运行时** ✅ 已完成
 
 目标：Mic → ASR → LLM → TTS → Speaker
 
 - [x] WebSocket 网关
 - [x] VoiceSession 运行时
 - [x] XState 状态机
-- [x] 流式 ASR Worker (Paraformer Realtime v2)
+- [x] 流式 ASR Worker (Fun-ASR Realtime)
+- [x] 流式 ASR Worker (Qwen ASR)
 - [x] 流式 LLM Worker (Qwen Turbo)
-- [x] 流式 TTS Worker (CosyVoice v2)
+- [x] 流式 TTS Worker (NLS Gateway HTTP + WebSocket)
+- [x] 流式 TTS Worker (Aliyun Streaming WebSocket)
 - [x] 回放队列
 - [x] 打断处理
 - [x] 诊断系统
+- [x] Streaming ASR (帧实时发送，partial 结果带 seq)
 
 ## 系统边界
 
@@ -85,21 +88,35 @@ LiveKit Voice Chat Backend
 | `LLM_MODEL` | LLM 模型 | `qwen-turbo` |
 | `LLM_TEMPERATURE` | LLM 温度 | `0.7` |
 | `LLM_MAX_TOKENS` | 最大 token 数 | `2000` |
-| `ASR_MODEL` | ASR 模型 | `paraformer-realtime-v2` |
+| `ASR_MODEL` | ASR 模型 | `fun-asr-realtime` |
 | `ASR_FORMAT` | 音频格式 | `pcm` |
 | `ASR_SAMPLE_RATE` | 采样率 | `16000` |
-| `TTS_MODEL` | TTS 模型 | `cosyvoice-v2` |
-| `TTS_VOICE` | 音色 | `longxiaochuan` |
-| `TTS_FORMAT` | 音频格式 | `wav` |
-| `TTS_SAMPLE_RATE` | 采样率 | `22050` |
+| `TTS_MODE` | TTS 模式 | `http` (可选 `websocket`) |
+| `NLS_TTS_APPKEY` | NLS Gateway Appkey | (TTS 必填) |
+| `NLS_TTS_TOKEN` | NLS Gateway Token | (TTS 必填) |
+| `NLS_TTS_VOICE` | NLS TTS 音色 | `xiaoyun` |
+| `NLS_TTS_FORMAT` | NLS TTS 格式 | `wav` |
+| `NLS_TTS_SAMPLE_RATE` | NLS TTS 采样率 | `16000` |
 
 ### AI 服务详情
 
 | 组件 | 服务 | 协议 | 端点 |
 |------|------|------|------|
-| ASR | 通义 Paraformer | WebSocket | `wss://dashscope.aliyuncs.com/api-ws/v1/inference` |
+| ASR | 通义 Fun-ASR | WebSocket | `wss://dashscope.aliyuncs.com/api-ws/v1/inference` |
 | LLM | 通义 Qwen Turbo | HTTP SSE | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` |
-| TTS | 通义 CosyVoice | WebSocket | `wss://dashscope.aliyuncs.com/api-ws/v1/inference` |
+| TTS (HTTP) | NLS Gateway 异步 | HTTPS | `https://nls-gateway-cn-shanghai.aliyuncs.com/rest/v1/tts/async` |
+| TTS (WebSocket) | NLS Gateway 流式 | WebSocket | `wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1` |
+
+> 详细网络架构图和链路说明请参考 [NETWORK_ARCHITECTURE.md](./NETWORK_ARCHITECTURE.md)
+
+### TTS 模式
+
+TTS 支持两种模式，通过 `TTS_MODE` 环境变量切换：
+
+| 模式 | 说明 | 特点 |
+|------|------|------|
+| `http` | HTTP 异步轮询 | 3步：提交任务 → 轮询结果 → 下载音频 |
+| `websocket` | WebSocket 流式 | 实时流式输出，低延迟 |
 
 ## 非目标 (当前阶段)
 

@@ -39,29 +39,30 @@ src/
 ├── runtime/
 │   ├── state-machine/
 │   │   ├── conversation-machine.test.ts    # 状态机转换
-│   │   └── context.test.ts                 # Context 验证
+│   │   └── context.test.ts               # Context 验证
 │   ├── voice-session/
-│   │   ├── voice-session.test.ts           # 会话生命周期
+│   │   ├── voice-session.test.ts          # 会话生命周期
 │   │   ├── interrupt-handler.test.ts      # 打断逻辑
-│   │   └── session-manager.test.ts         # 会话管理
+│   │   └── session-manager.test.ts        # 会话管理
 │   ├── playback/
-│   │   ├── playback-queue.test.ts         # 队列操作
+│   │   ├── playback-queue.test.ts          # 队列操作
 │   │   └── underrun.test.ts               # underrun 检测
 │   └── diagnostics/
-│       └── diagnostics-collector.test.ts   # 指标收集
+│       └── diagnostics-collector.test.ts  # 指标收集
 ├── workers/
 │   ├── asr/
 │   │   └── qwen-asr.worker.test.ts         # ASR Worker
 │   ├── llm/
 │   │   └── qwen-llm.worker.test.ts         # LLM Worker
 │   └── tts/
-│       └── qwen-tts.worker.test.ts         # TTS Worker
+│       ├── nls-gateway-tts.worker.test.ts       # NLS HTTP TTS
+│       └── aliyun-streaming-tts.worker.test.ts  # NLS WebSocket TTS
 ├── gateway/
 │   └── protocol/
-│       └── codec.test.ts                   # 消息编解码
+│       └── codec.test.ts                  # 消息编解码
 └── infra/
     └── config/
-        └── config.test.ts                   # 配置加载
+        └── config.test.ts                 # 配置加载
 ```
 
 ## 测试命令
@@ -296,18 +297,28 @@ describe('Protocol Codec', () => {
 ```typescript
 // Workers 实现
 ├── asr/
-│   ├── qwen-asr.worker.ts    // 真实 Paraformer WebSocket
-│   └── mock-asr.worker.ts    // 测试用 mock
+│   ├── qwen-asr.worker.ts              // 真实 Fun-ASR WebSocket
+│   └── mock-asr.worker.ts              // 测试用 mock
 ├── llm/
-│   ├── qwen-llm.worker.ts    // 真实 Qwen HTTP SSE
-│   └── mock-llm.worker.ts    // 测试用 mock
+│   ├── qwen-llm.worker.ts              // 真实 Qwen HTTP SSE
+│   └── mock-llm.worker.ts              // 测试用 mock
 └── tts/
-    ├── qwen-tts.worker.ts    // 真实 CosyVoice WebSocket
-    └── mock-tts.worker.ts    // 测试用 mock
+    ├── nls-gateway-tts.worker.ts        // 真实 NLS HTTP 异步轮询
+    ├── aliyun-streaming-tts.worker.ts  // 真实 NLS WebSocket 流式
+    └── mock-tts.worker.ts              // 测试用 mock (保留)
 ```
 
-生产环境使用 `QwenAsrWorker` / `QwenLlmWorker` / `QwenTtsWorker`
+生产环境使用 `QwenAsrWorker` / `QwenLlmWorker` / `NlsGatewayTtsWorker` 或 `AliyunStreamingTtsWorker`
 测试环境可注入 `MockAsrWorker` / `MockLlmWorker` / `MockTtsWorker` 以隔离外部 API 依赖。
+
+### TTS Worker 选择
+
+通过 `TTS_MODE` 环境变量选择 TTS 实现：
+
+| TTS_MODE | Worker | 协议 |
+|----------|--------|------|
+| `http` | `NlsGatewayTtsWorker` | HTTPS 异步轮询 |
+| `websocket` | `AliyunStreamingTtsWorker` | WebSocket 流式 |
 
 ### WebSocket Mock
 

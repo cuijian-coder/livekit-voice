@@ -35,24 +35,60 @@
 - [测试策略](./testing/TESTING_STRATEGY.md)
 - [运行时诊断](./diagnostics/RUNTIME_DIAGNOSTICS.md)
 
+## 核心特性
+
+### 连续双工语音系统
+
+| 特性 | 描述 |
+|------|------|
+| Always-on Recording | 麦克风持续采集，VAD 只控制 UI 不阻塞发送 |
+| Silence Auto-commit | 600ms 静音自动触发 audio.commit |
+| Continuous Conversation | TTS 结束后回到 listening，持续对话 |
+| Barge-in | 用户可在助手说话时打断 |
+
+### 三层架构
+
+```
+┌─────────────────────────────────┐
+│     Voice Machine (XState)      │  状态管理、对话流程
+├─────────────────────────────────┤
+│     UtteranceManager            │  Turn 生命周期、自动提交
+├─────────────────────────────────┤
+│     SpeechDetector              │  VAD、能量检测、打断检测
+└─────────────────────────────────┘
+```
+
 ## 常用命令
 
 ```bash
-# 运行测试
-npm run test:run
+# 安装依赖 (在项目根目录)
+cd .. && pnpm install
+
+# 开发模式
+cd .. && pnpm --filter frontend run dev
 
 # 类型检查
-npx tsc --noEmit
+pnpm --filter frontend run typecheck
 
 # 代码规范
-npm run lint
+pnpm --filter frontend run lint
 
-# 启动开发服务器
-npm run dev
+# 运行测试
+pnpm --filter frontend run test:run
 ```
 
 ## 当前状态
 
-- **测试覆盖**: 160 个测试，100% 通过
-- **文档状态**: MVP 完成
-- **后续计划**: 添加更多诊断工具和调试面板
+- **测试覆盖**: 186 个测试，100% 通过
+- **文档状态**: 连续双工语音系统文档已完成
+- **核心模块**: SpeechDetector, UtteranceManager, BinaryTransport
+
+## 技术栈
+
+- **构建工具**: Vite
+- **包管理器**: pnpm workspace
+- **语言**: TypeScript (Vanilla, 无框架)
+- **状态管理**: XState v5
+- **测试**: Vitest
+- **样式**: CSS (无预处理器)
+- **共享包**: @livekit-voice/shared
