@@ -1,4 +1,5 @@
 import { getLogger } from '@livekit-voice/shared/logger'
+import { diagnosticsCollector } from '../debug-provider'
 
 const logger = getLogger()
 
@@ -35,6 +36,11 @@ export class TtsPlaybackManager {
       this.currentSource.buffer = audioBuffer
       this.currentSource.connect(this.audioContext.destination)
       this.currentSource.start()
+      diagnosticsCollector.add({
+        source: 'audio.playback',
+        type: 'chunk.played',
+        metadata: { size: pcmData.length }
+      })
       logger.debug('tts.playback.chunk', { size: pcmData.length, duration: audioBuffer.duration })
     } catch (err) {
       logger.error('tts.playback.chunk.error', { err })
@@ -54,6 +60,10 @@ export class TtsPlaybackManager {
       this.audioContext.close()
       this.audioContext = null
     }
+    diagnosticsCollector.add({
+      source: 'audio.playback',
+      type: 'playback.completed'
+    })
     logger.info('tts.playback.complete')
   }
 

@@ -4,6 +4,7 @@ import { ReconnectManager } from './reconnect-manager'
 import { createInitialTransportState } from './transport-state'
 import { getLogger } from '@livekit-voice/shared/logger'
 import { invariant } from '../../../../../self-healing/assert'
+import { diagnosticsCollector } from '../debug-provider'
 
 const logger = getLogger()
 
@@ -33,14 +34,24 @@ export class WebSocketClient {
       }
 
       this.updateState({ state: 'connecting' })
+      diagnosticsCollector.add({
+        source: 'transport.websocket',
+        type: 'connection.connecting',
+        metadata: { url: this.config.url }
+      })
       logger.info('transport.connecting', { url: this.config.url })
 
       try {
         this.ws = new WebSocket(this.config.url)
 
         this.ws.onopen = () => {
-          logger.info('transport.connected')
           this.updateState({ state: 'connected', lastConnectedAt: Date.now() })
+          diagnosticsCollector.add({
+            source: 'transport.websocket',
+            type: 'connection.opened',
+            metadata: { url: this.config.url }
+          })
+          logger.info('transport.connected')
           this.reconnectManager.onConnectionSuccess()
           resolve()
         }
@@ -61,11 +72,20 @@ export class WebSocketClient {
         this.ws.onclose = (event) => {
           logger.info('transport.disconnected', { code: event.code, reason: event.reason })
           this.handleDisconnect()
+          diagnosticsCollector.add({
+            source: 'transport.websocket',
+            type: 'connection.closed',
+            metadata: { code: event.code, reason: event.reason }
+          })
         }
 
         this.ws.onerror = (err) => {
           logger.error('transport.error', { err })
           this.updateState({ state: 'error', error: 'WebSocket error' })
+          diagnosticsCollector.add({
+            source: 'transport.websocket',
+            type: 'connection.error'
+          })
           reject(err)
         }
       } catch (err) {
@@ -164,6 +184,16 @@ export class WebSocketClient {
   private updateState(partial: Partial<TransportStateInfo>): void {
     this.state = { ...this.state, ...partial }
     this.stateHandlers.forEach((handler) => handler(this.state))
+
+    if (partial.state === 'connected') {
+      diagnosticsCollector.updateState({
+        websocket: { connected: true, lastConnectedAt: partial.lastConnectedAt }
+      })
+    } else if (partial.state === 'disconnected' || partial.state === 'error') {
+      diagnosticsCollector.updateState({
+        websocket: { connected: false }
+      })
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import { getLogger } from '@livekit-voice/shared/logger'
 import { binaryTransport } from '../transport'
 import { speechDetector } from './speech-detector'
+import { diagnosticsCollector } from '../debug-provider'
 
 const logger = getLogger()
 
@@ -55,6 +56,11 @@ export class AudioRecorder {
       source.connect(this.workletNode)
 
       this._isRecording = true
+      diagnosticsCollector.add({
+        source: 'audio.recorder',
+        type: 'recording.started'
+      })
+      diagnosticsCollector.updateState({ audio: { recording: true } })
       logger.info('audio.recording.started', { state: 'recording' })
     } catch (error) {
       logger.error('audio.recording.error', { error: String(error) })
@@ -112,6 +118,11 @@ export class AudioRecorder {
     logger.info('audio.recording.stop.requested')
 
     this._isRecording = false
+    diagnosticsCollector.add({
+      source: 'audio.recorder',
+      type: 'recording.stopped'
+    })
+    diagnosticsCollector.updateState({ audio: { recording: false } })
 
     if (this.workletNode) {
       this.workletNode.disconnect()
