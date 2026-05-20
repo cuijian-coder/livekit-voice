@@ -10,7 +10,8 @@ export class MessageList {
   private typingIndicator: TypingIndicator;
 
   constructor() {
-    this.element = createElement('div');
+    this.element = createElement('div')
+    this.element.setAttribute('data-testid', 'transcript')
     this.typingIndicator = new TypingIndicator();
     this.typingIndicator.getElement().style.display = 'none';
     this.element.appendChild(this.typingIndicator.getElement());

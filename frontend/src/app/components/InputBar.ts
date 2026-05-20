@@ -23,16 +23,18 @@ export class InputBar {
   private render(): void {
     const wrapper = createElement('div', 'input-bar__wrapper');
 
-    this.textarea.className = 'input-bar__textarea';
-    this.textarea.placeholder = '发消息...';
-    this.textarea.rows = 1;
+    this.textarea.className = 'input-bar__textarea'
+    this.textarea.placeholder = '发消息...'
+    this.textarea.rows = 1
+    this.textarea.setAttribute('data-testid', 'text-input')
 
-    this.actionButton.className = 'input-bar__action-button--mic';
+    this.actionButton.className = 'input-bar__action-button--mic'
+    this.actionButton.setAttribute('data-testid', 'push-to-talk')
 
-    wrapper.appendChild(this.textarea);
+    wrapper.appendChild(this.textarea)
 
-    this.element.appendChild(wrapper);
-    this.element.appendChild(this.actionButton);
+    this.element.appendChild(wrapper)
+    this.element.appendChild(this.actionButton)
   }
 
   private bindEvents(): void {
