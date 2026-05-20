@@ -20,8 +20,14 @@ voiceActor.subscribe((snapshot: any) => {
       turnId: snapshot.context.turnId
     })
 
+    const audioState = {
+      recording: state === 'listening' || state === 'transcribing',
+      playing: state === 'speaking'
+    }
+
     diagnosticsCollector.updateState({
-      conversation: { state, turnId: snapshot.context.turnId || '' }
+      conversation: { state, turnId: snapshot.context.turnId || '' },
+      audio: audioState
     })
 
     logger.debug('voice.state', { state, turnId: snapshot.context.turnId })

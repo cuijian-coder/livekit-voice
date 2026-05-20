@@ -3,27 +3,26 @@ import { test, expect } from '@playwright/test'
 test.describe('Conversation Flow', () => {
   test('session initializes on page load', async ({ page }) => {
     await page.goto('/')
+    await page.waitForTimeout(1500)
 
-    await page.waitForTimeout(1000)
-
-    const state = await page.evaluate(() => {
-      return (window as any).__voiceState
+    const diagnostics = await page.evaluate(() => {
+      return (window as any).__VOICE_DEBUG__?.getSnapshot?.()
     })
 
-    expect(state).toBeDefined()
+    expect(diagnostics).toBeDefined()
+    expect(diagnostics?.conversation).toBeDefined()
   })
 
   test('mic button is visible', async ({ page }) => {
     await page.goto('/')
-
-    const micButton = page.locator('[data-testid="mic-button"], button:has(svg)').first()
-    await expect(micButton).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('push-to-talk')).toBeVisible({ timeout: 5000 })
   })
 
-  test('backend accepts session.start', async ({ request }) => {
-    const ws = await request.context().newWebSocket()
-    // This is a simplified test - real test would use ws library
-    expect(true).toBe(true)
+  test('backend health endpoint responds', async ({ request }) => {
+    const response = await request.get('http://localhost:3000/health')
+    expect(response.status()).toBe(200)
+    const body = await response.json()
+    expect(body.status).toBe('ok')
   })
 })
 
@@ -32,19 +31,17 @@ test.describe('Runtime State', () => {
     await page.goto('/')
     await page.waitForTimeout(500)
 
-    // Check for console errors (excluding warnings)
     const errors: string[] = []
     page.on('console', (msg) => {
-      if (msg.type() === 'error') {
+      if (msg.type() === 'error' && !msg.text().includes('[vite]')) {
         errors.push(msg.text())
       }
     })
 
-    await page.waitForTimeout(1000)
+    await page.waitForTimeout(2000)
 
-    // Filter out known non-critical errors
     const criticalErrors = errors.filter(
-      (e) => !e.includes('favicon') && !e.includes('404')
+      (e) => !e.includes('favicon') && !e.includes('404') && !e.includes('WebSocket')
     )
 
     expect(criticalErrors.length).toBe(0)

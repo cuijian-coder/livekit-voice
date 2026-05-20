@@ -10,6 +10,14 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+  },
+  webServer: {
+    command: 'cd /home/jiancui2026/projects/livekit-voice && cd backend && node --import tsx src/main.ts & cd ../frontend && pnpm dev',
+    port: 5173,
+    reuseExistingServer: true,
+    timeout: 30000,
   },
   projects: [
     {

@@ -1,4 +1,10 @@
-const INVARIANT_ENABLED = process.env.DISABLE_INVARIANTS !== 'true'
+const INVARIANT_ENABLED = (() => {
+  try {
+    return process.env.DISABLE_INVARIANTS !== 'true'
+  } catch {
+    return true
+  }
+})()
 
 export function invariant(
   condition: unknown,
