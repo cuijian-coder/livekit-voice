@@ -20,6 +20,56 @@ LiveKit Voice Chat Backend
 | 运行时恢复 | 错误自动恢复 |
 | 会话管理 | 有状态会话生命周期 |
 
+## 可观察性 (Observability)
+
+系统提供完整的可观察性基础设施，支持 Playwright E2E 测试和 AI 调试。
+
+### testid 覆盖
+
+| testid | 数据来源 | 值 |
+|--------|---------|-----|
+| `ws-status` | wsClient.getState().state | disconnected/connecting/connected/reconnecting/error |
+| `conversation-state` | voiceActor.getSnapshot().value | idle/listening/thinking/speaking |
+| `audio-state` | voiceActor.getSnapshot().value | idle/recording/playing |
+| `reconnect-count` | wsClient.getState().reconnectAttempt | 0/1/2... |
+| `push-to-talk` | InputBar actionButton | 用户行为 |
+| `text-input` | InputBar textarea | 用户输入 |
+| `transcript` | MessageList element | 对话显示 |
+
+### StatusBar 组件
+
+- 位置: Header 右侧状态栏
+- 绑定: XState Machine + WebSocket Client 状态
+- 数据流向: `voiceActor.subscribe()` → `wsClient.onStateChange()` → StatusBar 更新
+
+### Debug Endpoint
+
+```
+GET /debug/runtime
+```
+
+返回机器可分析的 JSON 快照:
+
+```json
+{
+  "websocket": { "connected": false, "reconnectCount": 0 },
+  "audio": { "recording": false, "playing": false },
+  "conversation": { "state": "idle", "turnId": "" },
+  "recentEvents": [],
+  "collectedAt": 1234567890,
+  "totalEvents": 0
+}
+```
+
+### window.__VOICE_DEBUG__
+
+Playwright 可直接读取机器状态:
+
+```typescript
+const debug = await page.evaluate(() => window.__VOICE_DEBUG__)
+expect(debug.conversation.state).toBe('speaking')
+```
+
 ## 技术选型
 
 ### 运行时
