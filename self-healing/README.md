@@ -6,8 +6,9 @@ Establish an AI-understandable unified command entry point, enabling AI to:
 
 ```bash
 pnpm doctor          # Auto-diagnose system health
-pnpm test:e2e        # Run E2E tests
+pnpm validate        # Full pipeline: typecheck → unit → mocked → real-browser → smoke
 pnpm test:run        # Run unit tests
+pnpm test:e2e        # Run all E2E tests
 ```
 
 AI determines automatically based on exit code and output:
@@ -24,12 +25,47 @@ self-healing/
 ├── turbo.json                    # Turbo configuration
 ├── README.md                     # This file
 ├── doctor.ts                     # Health check script
+├── validate.sh                   # Full validation pipeline
 ├── playwright.config.ts          # E2E configuration
-├── commands.md                   # Command reference
-└── e2e/                          # E2E tests
-    ├── audio-runtime.spec.ts     # Audio runtime checks
-    └── conversation-flow.spec.ts # Conversation flow tests
+├── assert.ts                     # Runtime assertions
+├── diagnostics/
+│   ├── collector.ts              # DiagnosticsCollector
+│   └── types.ts                  # Type definitions
+└── e2e/                          # E2E tests (3 layers)
+    ├── mocked/                   # Deterministic CI tests
+    ├── real-browser/             # Real browser behavior tests
+    └── smoke/                    # Deployment sanity checks
 ```
+
+---
+
+## Test Layers
+
+### mocked/ (27 tests)
+Deterministic tests for CI fast feedback. No real network calls.
+
+- `push-to-talk.spec.ts`
+- `interrupt.spec.ts`
+- `reconnect.spec.ts`
+- `streaming.spec.ts`
+- `websocket.spec.ts`
+- `audio-runtime.spec.ts`
+- `conversation-flow.spec.ts`
+
+### real-browser/ (12 tests)
+Real browser behavior validation with fake backend.
+
+- `permissions.spec.ts` - microphone permissions
+- `audio-context.spec.ts` - AudioContext behavior
+- `media-devices.spec.ts` - mediaDevices availability
+- `visibility.spec.ts` - visibility API
+
+### smoke/ (7 tests)
+Deployment sanity checks.
+
+- `health.spec.ts` - backend health endpoints
+- `websocket.spec.ts` - WebSocket connectivity
+- `diagnostics.spec.ts` - diagnostics availability
 
 ---
 
@@ -56,122 +92,57 @@ duration: 55ms
 artifacts/doctor-report.json written
 ```
 
-**Checks:**
+### pnpm validate
 
-| Check | Method | Timeout | Pass Criteria |
-|-------|--------|---------|---------------|
-| frontend | HTTP GET localhost:5173 | 2000ms | 200 OK |
-| backend | HTTP GET localhost:3000/health | 2000ms | 200 OK |
-| websocket | Connect ws://localhost:3000/ws | 3000ms | Connected |
-| qwen-api-key | Check env variable | 100ms | Set and non-empty |
-| backend-port | Check PORT env variable | 100ms | Valid port number |
-| node-version | Check process.version | 100ms | >= 20.0.0 |
+Full validation pipeline:
 
-**Output:**
-- Console: Human-readable results
-- JSON: `artifacts/doctor-report.json`
-- Exit code: 0 = pass, 1 = fail
+```bash
+$ pnpm validate
+
+=== Step 1: Typecheck ===
+=== Step 2: Unit Tests ===
+=== Step 3: Mocked E2E (CI fast) ===
+=== Step 4: Real Browser E2E ===
+=== Step 5: Smoke Tests ===
+=== All Checks Passed ===
+```
 
 ### pnpm test:e2e
 
-Run Playwright E2E tests:
+Run all Playwright E2E tests (mocked + real-browser + smoke):
 
 ```bash
 $ pnpm test:e2e
 
-  ✓ audio-runtime.spec.ts
-  ✓ conversation-flow.spec.ts
-
-  2 tests passed (2)
-```
-
-### pnpm test:run
-
-Run all unit tests:
-
-```bash
-$ pnpm test:run
-
-  Test Files  15 passed (15)
-       Tests  186 passed (186)
+  46 passed, 1 skipped (52s)
 ```
 
 ---
 
-## Quick Verification
+## Error Classification
 
-```bash
-# 1. Run health check
-pnpm doctor
+Structured error types for AI debugging:
 
-# 2. If pass, run unit tests
-pnpm test:run
+```typescript
+ErrorType = {
+  Permission,  // microphone denied, security error
+  Device,      // no microphone, device not found
+  Websocket,   // connection failed, disconnected
+  Network,     // request timeout, rate limit
+  Logic        // application logic error
+}
 
-# 3. If pass, run E2E tests
-pnpm test:e2e
-
-# Full pipeline
-pnpm doctor && pnpm test:run && pnpm test:e2e
+ErrorCodes = {
+  MIC001: 'MicrophonePermissionDenied',   // NotAllowedError
+  MIC002: 'MicrophoneDeviceNotFound',     // NotFoundError
+  WS001: 'WebsocketConnectionFailed',
+  WS002: 'WebsocketDisconnected',
+  ASR001: 'AsrStreamError',
+  LLM001: 'LlmGenerationError',
+  TTS001: 'TtsSynthesisError',
+  TTS002: 'TtsPlaybackError',
+}
 ```
-
----
-
-## Future Checks
-
-Potential additions:
-
-- [ ] Audio device availability
-- [ ] Microphone permission
-- [ ] AI Provider API connectivity (requires real requests)
-- [ ] Session state consistency
-- [ ] Memory/CPU usage
-
----
-
-## AI Usage Scenarios
-
-### Scenario 1: Pre-flight check before system start
-
-```bash
-# AI checks before any operation
-pnpm doctor
-if [ $? -ne 0 ]; then
-  cat artifacts/doctor-report.json
-  exit 1
-fi
-```
-
-### Scenario 2: Diagnose after test failure
-
-```bash
-# AI views detailed report on failure
-pnpm doctor
-cat artifacts/doctor-report.json
-# Locate problem based on failed checks
-```
-
-### Scenario 3: CI/CD Integration
-
-```yaml
-# .github/workflows/test.yml
-- name: Doctor Check
-  run: pnpm doctor
-
-- name: Unit Tests
-  run: pnpm test:run
-
-- name: E2E Tests
-  run: pnpm test:e2e
-```
-
----
-
-## Constraints
-
-1. **Do NOT call real AI APIs**: doctor.ts only validates environment config, no real requests
-2. **Short timeouts**: All checks should complete within 5 seconds
-3. **Deterministic results**: No retries, no randomness
-4. **Clear error messages**: Each failure must have a clear reason
 
 ---
 
@@ -190,17 +161,20 @@ All critical UI elements have stable `data-testid` attributes for Playwright tes
 | `push-to-talk` | Push-to-talk button | InputBar actionButton |
 | `text-input` | Text input textarea | InputBar textarea |
 | `transcript` | Message list / transcript | MessageList element |
+| `mic-permission` | Microphone permission state | navigator.permissions |
+| `tts-status` | TTS playback state | Derived from voiceActor state |
 
 ### Playwright Usage
 
 ```typescript
 // Read UI display state
-await expect(page.getByTestId('ws-status')).toHaveText('connected')
-await expect(page.getByTestId('conversation-state')).toHaveText('speaking')
+await expect(page.getByTestId('ws-status')).toContainText('connected')
+await expect(page.getByTestId('conversation-state')).toContainText('speaking')
 
 // Read machine internal state
 const debug = await page.evaluate(() => window.__VOICE_DEBUG__)
 expect(debug.conversation.state).toBe('speaking')
+expect(debug.permissions.microphone).toBe('granted')
 
 // Element interaction
 await page.getByTestId('push-to-talk').click()
@@ -220,27 +194,26 @@ StatusBar (实时 UI 状态显示)
 voiceActor.subscribe() + wsClient.onStateChange()
 ```
 
-### Debug Endpoint
-
-```bash
-curl http://localhost:3000/debug/runtime
-```
-
-Returns machine-parseable JSON snapshot of runtime state.
-
 ---
 
-## Runtime Diagnostics Panel
+## Runtime Diagnostics
 
 ### GET /debug/runtime
 
-Returns:
+Backend endpoint returning machine-parseable JSON:
 
 ```json
 {
-  "websocket": { "connected": false, "reconnectCount": 0 },
+  "permissions": { "microphone": "granted" },
+  "websocket": { "connected": true, "reconnectCount": 0 },
   "audio": { "recording": false, "playing": false },
   "conversation": { "state": "idle", "turnId": "" },
+  "environment": {
+    "secureContext": true,
+    "mediaDevicesSupported": true,
+    "audioContextState": "running",
+    "userAgent": "..."
+  },
   "recentEvents": [],
   "collectedAt": 1234567890,
   "totalEvents": 0
@@ -257,4 +230,48 @@ window.__VOICE_DEBUG__ = {
   getEvents: () => diagnosticsCollector.getEvents(),
   exportState: () => diagnosticsCollector.exportState()
 }
+```
+
+---
+
+## Constraints
+
+1. **Do NOT call real AI APIs in CI**: mocked tests use fake backend
+2. **CI does NOT run real TTS**: real-browser tests use fake TTS chunks
+3. **Smoke tests do NOT add unnecessary flakiness**: simple health checks only
+4. **Short timeouts**: All checks should complete within 5 seconds
+5. **Deterministic results**: No retries, no randomness
+6. **Clear error messages**: Each failure must have a clear reason
+
+---
+
+## AI Usage Scenarios
+
+### Scenario 1: Pre-flight check before system start
+
+```bash
+pnpm doctor
+if [ $? -ne 0 ]; then
+  cat artifacts/doctor-report.json
+  exit 1
+fi
+```
+
+### Scenario 2: Full validation before PR
+
+```bash
+pnpm validate
+# Or run layers individually for faster feedback
+pnpm playwright test e2e/mocked/
+pnpm playwright test e2e/real-browser/
+pnpm playwright test e2e/smoke/
+```
+
+### Scenario 3: Diagnose after test failure
+
+```bash
+# AI inspects Playwright traces/screenshots
+# Reads window.__VOICE_DEBUG__
+# Checks browser console logs
+# Identifies root cause from error classification
 ```

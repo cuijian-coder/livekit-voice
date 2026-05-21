@@ -21,7 +21,7 @@ LiveKit Voice Chat UI
 
 ## 当前阶段
 
-**Phase 4: 连续双工语音系统** ✅ 已完成
+**Phase 5: Production-Ready Validation System** ✅ 已完成
 
 - [x] Vite + TypeScript 项目初始化
 - [x] XState v5 状态机 (连续对话)
@@ -32,7 +32,10 @@ LiveKit Voice Chat UI
 - [x] TTS 流式播放 (playback.ts)
 - [x] Barge-in / Interruption (打断检测 → 状态转换)
 - [x] 运行时诊断系统 (Logger + Invariant + Validation)
-- [x] 单元测试覆盖 (186 tests)
+- [x] Error Classification (Permission/Device/Websocket/Network/Logic)
+- [x] 单元测试覆盖 (136 tests)
+- [x] E2E 测试分层 (mocked/real-browser/smoke, 46 tests)
+- [x] UI 可观测性 (data-testid, window.__VOICE_DEBUG__)
 
 ## 技术选型
 
@@ -65,6 +68,22 @@ LiveKit Voice Chat UI
 | Invariant | DEV/PROD 断言 |
 | Validation | 状态 + 转换验证 |
 | Timeline | 事件时间线 |
+| Errors | 错误分类 (Permission/Device/Websocket/Network/Logic) |
+| DiagnosticsCollector | 运行时快照 (permissions/environment/conversation) |
+| __VOICE_DEBUG__ | Playwright 可读的全局诊断对象 |
+
+### UI 可观测性
+
+| testid | 用途 |
+|--------|------|
+| ws-status | WebSocket 连接状态 |
+| conversation-state | 对话状态 |
+| audio-state | 录音/播放状态 |
+| mic-permission | 麦克风权限状态 |
+| tts-status | TTS 播放状态 |
+| reconnect-count | 重连次数 |
+| push-to-talk | 按钮交互 |
+| text-input | 文本输入 |
 
 ## 系统边界
 
@@ -97,7 +116,9 @@ LiveKit Voice Chat UI
 1. **无框架**: 使用 Vanilla TypeScript + DOM API
 2. **XState v5**: 使用最新版本 XState
 3. **全双工**: 麦克风和 TTS 同时工作
-4. **测试驱动**: 186+ 单元测试覆盖
+4. **测试驱动**: 136 单元测试 + 46 E2E 测试
+5. **分层测试**: mocked (CI快速) / real-browser (真实验证) / smoke (部署检查)
+6. **AI可读**: 结构化错误 + window.__VOICE_DEBUG__
 
 ## 连续对话流程
 
