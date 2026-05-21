@@ -37,6 +37,47 @@ voiceActor.subscribe((snapshot: any) => {
 
 voiceActor.start();
 
+initEnvironmentDiagnostics()
+
+async function initEnvironmentDiagnostics() {
+  diagnosticsCollector.updateState({
+    environment: {
+      secureContext: window.isSecureContext,
+      mediaDevicesSupported: !!navigator.mediaDevices,
+      audioContextState: 'unknown',
+      userAgent: navigator.userAgent,
+    }
+  })
+
+  if (navigator.permissions && navigator.mediaDevices) {
+    try {
+      const result = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+      diagnosticsCollector.updateState({
+        permissions: { microphone: result.state as 'granted' | 'denied' | 'prompt' }
+      })
+      result.onchange = () => {
+        diagnosticsCollector.updateState({
+          permissions: { microphone: result.state as 'granted' | 'denied' | 'prompt' }
+        })
+      }
+    } catch {
+      logger.debug('permissions.query not supported')
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const hasAudioInput = devices.some(d => d.kind === 'audioinput')
+      diagnosticsCollector.updateState({
+        environment: {
+          mediaDevicesSupported: hasAudioInput
+        }
+      })
+    } catch {
+      logger.debug('enumerateDevices not supported')
+    }
+  }
+}
+
 export function getVoiceActor() {
   return voiceActor;
 }

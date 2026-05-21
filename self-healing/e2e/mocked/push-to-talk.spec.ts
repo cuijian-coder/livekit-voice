@@ -4,7 +4,7 @@ import {
   expectAudioState,
   expectPushToTalkVisible,
   getRuntimeDiagnostics
-} from './helpers/assertions'
+} from '../helpers/assertions'
 
 test.describe('Push-to-Talk', () => {
   test.beforeEach(async ({ page }) => {

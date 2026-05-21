@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import {
   expectWsStatus,
   expectReconnectCount
-} from './helpers/assertions'
+} from '../helpers/assertions'
 
 test.describe('Reconnect', () => {
   test.beforeEach(async ({ page }) => {

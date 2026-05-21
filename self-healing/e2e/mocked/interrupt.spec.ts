@@ -3,7 +3,7 @@ import {
   expectConversationState,
   expectAudioState,
   clickPushToTalk
-} from './helpers/assertions'
+} from '../helpers/assertions'
 
 test.describe('Interrupt', () => {
   test.beforeEach(async ({ page }) => {

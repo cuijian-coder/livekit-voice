@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import {
   expectWsStatus,
   expectConversationState
-} from './helpers/assertions'
+} from '../helpers/assertions'
 
 test.describe('WebSocket', () => {
   test.beforeEach(async ({ page }) => {

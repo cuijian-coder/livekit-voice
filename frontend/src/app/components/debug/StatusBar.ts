@@ -1,10 +1,12 @@
 import { createElement } from '../../utils/dom'
 import { voiceActor } from '../../voice/providers/voice-provider'
 import { wsClient } from '../../runtime/transport/websocket-client'
+import { diagnosticsCollector } from '../../runtime/debug-provider'
 import { WsStatus } from './WsStatus'
 import { ConversationState } from './ConversationState'
 import { AudioState } from './AudioState'
 import { ReconnectCount } from './ReconnectCount'
+import { MicPermission } from './MicPermission'
 
 export class StatusBar {
   private element: HTMLElement
@@ -12,6 +14,7 @@ export class StatusBar {
   private conversationState: ConversationState
   private audioState: AudioState
   private reconnectCount: ReconnectCount
+  private micPermission: MicPermission
 
   constructor() {
     this.element = createElement('div', 'status-bar')
@@ -20,9 +23,11 @@ export class StatusBar {
     this.conversationState = new ConversationState()
     this.audioState = new AudioState()
     this.reconnectCount = new ReconnectCount()
+    this.micPermission = new MicPermission()
 
     this.bindVoiceActor()
     this.bindWsClient()
+    this.bindDiagnostics()
     this.render()
   }
 
@@ -45,6 +50,13 @@ export class StatusBar {
     this.reconnectCount.setCount(initialState.reconnectAttempt || 0)
   }
 
+  private bindDiagnostics(): void {
+    const snapshot = diagnosticsCollector.snapshot()
+    if (snapshot.permissions?.microphone) {
+      this.micPermission.setPermission(snapshot.permissions.microphone)
+    }
+  }
+
   private render(): void {
     const container = createElement('div', 'status-bar__container')
 
@@ -60,6 +72,8 @@ export class StatusBar {
     container.appendChild(this.conversationState.getElement())
     container.appendChild(divider())
     container.appendChild(this.audioState.getElement())
+    container.appendChild(divider())
+    container.appendChild(this.micPermission.getElement())
     container.appendChild(divider())
     container.appendChild(this.reconnectCount.getElement())
 

@@ -1,6 +1,6 @@
 const INVARIANT_ENABLED = (() => {
   try {
-    return process.env.DISABLE_INVARIANTS !== 'true'
+    return (globalThis as any).process?.env?.DISABLE_INVARIANTS !== 'true'
   } catch {
     return true
   }

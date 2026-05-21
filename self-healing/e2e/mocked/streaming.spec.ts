@@ -4,7 +4,7 @@ import {
   expectAudioState,
   clickPushToTalk,
   getRuntimeDiagnostics
-} from './helpers/assertions'
+} from '../helpers/assertions'
 
 test.describe('Streaming', () => {
   test.beforeEach(async ({ page }) => {

@@ -7,6 +7,7 @@ import { binaryTransport } from '../../runtime/transport';
 import { wsClient } from '../../runtime/transport/websocket-client';
 import { getLogger } from '@livekit-voice/shared/logger';
 import { invariant, assertNotNull } from '../../../../../self-healing/assert';
+import { ErrorCodes, parseDomException, getErrorType, ErrorType } from '../../runtime/errors';
 
 const logger = getLogger();
 
@@ -16,7 +17,15 @@ async function startAudioRecording() {
     await audioRecorder.start();
     logger.info('audio.recording.started');
   } catch (error) {
-    logger.error('audio.recording.error', { error: String(error) });
+    const errorCode = parseDomException(error)
+    const errorType = getErrorType(error)
+    const metadata = {
+      errorType,
+      errorCode: errorCode || 'UNKNOWN',
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : 'UnknownError',
+    }
+    logger.error('audio.recording.error', metadata)
   }
 }
 
