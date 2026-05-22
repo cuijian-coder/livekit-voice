@@ -39,12 +39,7 @@ export class App {
     ttsPlayback.init();
 
     wsClient.onMessage(msg => messageRouter.route(msg));
-    wsClient.onBinary(data => {
-      const state = voiceActor.getSnapshot().value;
-      if (state === 'speaking') {
-        ttsPlayback.onChunk(data);
-      }
-    });
+    wsClient.onBinary(data => messageRouter.routeBinary(data));
 
     utteranceManager.setOnInterruptedCallback(() => {
       voiceActor.send({ type: 'INTERRUPTING' } as any);

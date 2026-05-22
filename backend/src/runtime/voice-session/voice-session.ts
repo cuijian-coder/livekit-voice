@@ -252,6 +252,9 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       case 'submit.text':
         this.handleTextSubmit(msg.text)
         break
+      case CLIENT_EVENTS.READALOUD_START:
+        this.handleReadAloudStart(msg.messageId, msg.text)
+        break
       default:
         this.logger.warn({ sessionId: this.sessionId, type: msg.type }, 'unknown.message.type')
     }
@@ -417,6 +420,40 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     // DEBUG: Check actor state after sending
     const snapshot = this.actor.getSnapshot()
     this.logger.info({ sessionId: this.sessionId, actorState: snapshot.value }, 'actor_state_after_asr_complete')
+  }
+
+  private async handleReadAloudStart(messageId: string, text: string): Promise<void> {
+    this.logger.info({ sessionId: this.sessionId, messageId, textLength: text.length }, 'readAloud.start')
+    
+    // Send started event
+    this.send({ type: SERVER_EVENTS.READALOUD_STARTED, messageId })
+    
+    try {
+      // Use a new AbortController for readAloud (independent from session)
+      const readAloudAbortController = new AbortController()
+      const signal = readAloudAbortController.signal
+      
+      // Stream TTS audio chunks
+      for await (const audioChunk of this.ttsWorker.stream(text, signal, this.logger)) {
+        if (signal.aborted) {
+          this.logger.info({ sessionId: this.sessionId, messageId }, 'readAloud.aborted')
+          return
+        }
+        if (audioChunk.length === 0) continue
+        this.sendBinary(audioChunk)
+      }
+      
+      // Send complete event
+      this.send({ type: SERVER_EVENTS.READALOUD_COMPLETE, messageId })
+      this.logger.info({ sessionId: this.sessionId, messageId }, 'readAloud.complete')
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        this.logger.info({ sessionId: this.sessionId, messageId }, 'readAloud.aborted')
+        return
+      }
+      this.logger.error({ sessionId: this.sessionId, messageId, err }, 'readAloud.error')
+      this.send({ type: SERVER_EVENTS.RUNTIME_ERROR, error: 'Read aloud failed', code: 4004 })
+    }
   }
 
   private async startTranscribingWithAudio(audioData: Buffer): Promise<void> {

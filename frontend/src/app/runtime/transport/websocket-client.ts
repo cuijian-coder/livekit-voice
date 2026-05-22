@@ -135,9 +135,9 @@ export class WebSocketClient {
     return () => this.messageHandlers.delete(handler)
   }
 
-  onBinary(handler: BinaryHandler): () => void {
-    this.binaryHandlers.add(handler)
-    return () => this.binaryHandlers.delete(handler)
+  onBinary(handler: (data: ArrayBuffer) => void): () => void {
+    this.binaryHandlers.add((data: Uint8Array) => handler(data.buffer as ArrayBuffer))
+    return () => this.binaryHandlers.clear()
   }
 
   onStateChange(handler: StateChangeHandler): () => void {
