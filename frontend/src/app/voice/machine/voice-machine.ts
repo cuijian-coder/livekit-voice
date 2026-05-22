@@ -153,7 +153,15 @@ export const voiceMachine = setup({
               return text.trim().length > 0
             },
             target: 'thinking',
-            actions: 'setFinalTranscript',
+            actions: [
+              'setFinalTranscript',
+              ({ event }: any) => {
+                const text = (event as any).text || ''
+                if (text.trim().length > 0) {
+                  wsClient.send({ type: 'submit.text', text } as any)
+                }
+              },
+            ],
           },
           {
             target: 'idle',

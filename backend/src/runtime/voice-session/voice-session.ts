@@ -318,6 +318,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
               text: result.text
             })
           } else {
+            this.currentTranscript = result.text
             this.send({
               type: SERVER_EVENTS.ASR_FINAL,
               turnId: this.currentTurnId,
@@ -401,7 +402,8 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     }
 
     this.logger.info({ sessionId: this.sessionId }, 'asr.stream.finalized')
-    this.actor.send({ type: 'ASR_COMPLETE', text: '' })
+    // Do not auto-transition to THINKING. Wait for client submit.text.
+    // Backend actor stays in TRANSCRIBING until client decides to proceed.
 
     this.asrStreamTask = null
     this.asrStreamController = null
@@ -413,10 +415,9 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     if (!this.currentTurnId) {
       this.currentTurnId = `text-turn-${Date.now()}`
     }
-    this.send({ type: SERVER_EVENTS.ASR_FINAL, text })
-    this.logger.info({ sessionId: this.sessionId, state: this._state }, 'sending ASR_COMPLETE to actor')
+    // Text submit does not broadcast asr.final back to client (client already knows the text)
+    this.logger.info({ sessionId: this.sessionId, state: this._state, text }, 'submit.text received, starting LLM')
     this.actor.send({ type: 'ASR_COMPLETE', text })
-    this.logger.info({ sessionId: this.sessionId }, 'ASR_COMPLETE sent')
 
     // DEBUG: Check actor state after sending
     const snapshot = this.actor.getSnapshot()
@@ -514,6 +515,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       metadata: { reason: 'user' }
     })
     this.actor.send({ type: 'INTERRUPT' })
+    this.sendStateUpdate()
     this.eventBus.emit('interrupt.detected', 'user')
     this.sendPlaybackCompleted(true)
   }

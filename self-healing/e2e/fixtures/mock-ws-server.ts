@@ -104,20 +104,11 @@ export class MockWsServer {
         break
 
       case 'audio.commit':
-        this.send(ws, { type: 'asr.final', text: 'Test transcript', turnId: msg.turnId })
+        // Simulate ASR delay then send asr.final. Do NOT auto-start LLM.
+        // Client will send submit.text after receiving asr.final to trigger LLM.
         const t1 = setTimeout(() => {
-          this.send(ws, { type: 'llm.started' })
-          this.send(ws, { type: 'llm.token', token: 'Hello' })
-          const t2 = setTimeout(() => {
-            this.send(ws, { type: 'llm.complete', fullText: 'Hello, how can I help you?' })
-            const t3 = setTimeout(() => {
-              this.send(ws, { type: 'tts.complete' })
-              this.send(ws, { type: 'state.update', state: 'idle', turnId: '' })
-            }, 500)
-            this.addTimer(ws, t3)
-          }, 100)
-          this.addTimer(ws, t2)
-        }, 100)
+          this.send(ws, { type: 'asr.final', text: 'Test transcript', turnId: msg.turnId })
+        }, 200)
         this.addTimer(ws, t1)
         break
 
