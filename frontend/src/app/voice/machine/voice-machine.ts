@@ -146,7 +146,8 @@ export const voiceMachine = setup({
     },
     transcribing: {
       after: {
-        5000: {
+        // Real ASR can take 5-10s; give generous 15s timeout
+        15000: {
           target: 'idle',
           actions: assign({
             transcript: () => '',
