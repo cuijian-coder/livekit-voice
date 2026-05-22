@@ -69,12 +69,18 @@ export class InputBar {
       })
     }
 
-    // 显示实时 ASR 部分结果
-    if (isTranscribing) {
+    // 显示实时 ASR 部分结果或最终 transcript
+    if (isTranscribing || state === 'thinking') {
       const partialTranscript = snapshot.context.partialTranscript
       if (partialTranscript) {
         this.textarea.value = partialTranscript
       }
+    }
+
+    // 显示最终 transcript (仅在 listening/idle 状态，不是 thinking)
+    const finalTranscript = snapshot.context.transcript
+    if (finalTranscript && (state === 'listening' || state === 'idle')) {
+      this.textarea.value = finalTranscript
     }
   }
 

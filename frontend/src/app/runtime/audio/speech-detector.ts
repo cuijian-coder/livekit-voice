@@ -9,6 +9,7 @@ export interface SpeechDetectorConfig {
   energyThreshold: number
   silenceTimeoutMs: number
   minSpeechDurationMs: number
+  maxFramesUntilEnd?: number
 }
 
 export type SpeechStateChangeHandler = (state: SpeechState) => void
@@ -21,17 +22,20 @@ export class SpeechDetector {
   private speechStartTime = 0
   private stateChangeHandler: SpeechStateChangeHandler | null = null
   private isAssistantSpeaking = false
+  private frameCount = 0
 
   constructor(config: Partial<SpeechDetectorConfig> = {}) {
     this.config = {
       energyThreshold: config.energyThreshold ?? AUDIO_CONFIG.micEnergyThreshold,
       silenceTimeoutMs: config.silenceTimeoutMs ?? AUDIO_CONFIG.silenceTimeoutMs,
       minSpeechDurationMs: config.minSpeechDurationMs ?? AUDIO_CONFIG.minSpeechDurationMs,
+      maxFramesUntilEnd: config.maxFramesUntilEnd,
     }
     logger.info('speechDetector.init', this.config)
   }
 
   onFrame(float32Data: Float32Array): SpeechState {
+    this.frameCount++
     const energy = this.computeRMS(float32Data)
     const now = Date.now()
     const prevState = this.state
@@ -49,6 +53,13 @@ export class SpeechDetector {
         return 'IDLE'
 
       case 'SPEAKING':
+        const forceEnd = this.config.maxFramesUntilEnd && 
+                         this.frameCount >= this.config.maxFramesUntilEnd
+        if (forceEnd) {
+          this.state = 'POSSIBLE_END'
+          this.emitStateChange(prevState)
+          return 'POSSIBLE_END'
+        }
         if (energy > this.config.energyThreshold) {
           if (this.isAssistantSpeaking) {
             const prevState = this.state
@@ -62,9 +73,11 @@ export class SpeechDetector {
         } else {
           this.silenceStartTime = now
           const silenceDuration = now - this.lastSpeechTime
-          if (silenceDuration >= this.config.silenceTimeoutMs) {
+          const forceEnd = this.config.maxFramesUntilEnd && 
+                           this.frameCount >= this.config.maxFramesUntilEnd
+          if (silenceDuration >= this.config.silenceTimeoutMs || forceEnd) {
             const speechDuration = this.lastSpeechTime - this.speechStartTime
-            if (speechDuration >= this.config.minSpeechDurationMs) {
+            if (speechDuration >= this.config.minSpeechDurationMs || forceEnd) {
               this.state = 'POSSIBLE_END'
               this.emitStateChange(prevState)
               return 'POSSIBLE_END'
@@ -109,12 +122,18 @@ export class SpeechDetector {
     this.stateChangeHandler = handler
   }
 
+  setMaxFramesUntilEnd(count: number | undefined): void {
+    this.config.maxFramesUntilEnd = count
+    logger.debug('speechDetector.setMaxFramesUntilEnd', { count })
+  }
+
   reset(): void {
     const prevState = this.state
     this.state = 'IDLE'
     this.lastSpeechTime = 0
     this.silenceStartTime = null
     this.speechStartTime = 0
+    this.frameCount = 0
     if (prevState !== 'IDLE') {
       this.emitStateChange(prevState)
     }

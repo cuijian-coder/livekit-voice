@@ -13,12 +13,20 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-  webServer: {
-    command: 'cd /home/jiancui2026/projects/livekit-voice && cd backend && node --import tsx src/main.ts & cd ../frontend && pnpm dev',
-    port: 5173,
-    reuseExistingServer: true,
-    timeout: 30000,
-  },
+  webServer: [
+    {
+      command: 'cd /home/jiancui2026/projects/livekit-voice && npx tsx self-healing/e2e/fixtures/start-mock-server.ts',
+      port: 3000,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30000,
+    },
+    {
+      command: 'cd /home/jiancui2026/projects/livekit-voice/frontend && npx vite --clearScreen false',
+      port: 5173,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30000,
+    },
+  ],
   projects: [
     {
       name: 'chromium',

@@ -57,3 +57,14 @@ class ReadAloudStore {
 }
 
 export const readAloudStore = new ReadAloudStore();
+
+// Expose to window for E2E testing (DEV only)
+declare global {
+  interface Window {
+    __READALOUD_STORE__?: typeof readAloudStore
+  }
+}
+
+if (import.meta.env.DEV) {
+  window.__READALOUD_STORE__ = readAloudStore
+}

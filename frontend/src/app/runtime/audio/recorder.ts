@@ -1,7 +1,7 @@
 import { getLogger } from '@livekit-voice/shared/logger'
-import { binaryTransport } from '../transport'
-import { speechDetector } from './speech-detector'
 import { diagnosticsCollector } from '../debug-provider'
+import { pcmPipeline } from './pcm-pipeline'
+import { speechDetector } from './speech-detector'
 
 const logger = getLogger()
 
@@ -13,8 +13,28 @@ export class AudioRecorder {
   private workletNode: AudioWorkletNode | null = null
   private audioLevelCallback: AudioLevelCallback | null = null
   private _isRecording = false
+  private _testMode = false
+
+  setTestMode(enabled: boolean): void {
+    this._testMode = enabled
+    logger.debug('audio.recorder.testMode', { enabled })
+  }
 
   async start(): Promise<void> {
+    if (this._testMode) {
+      logger.info('audio.recording.starting.testMode')
+      this._isRecording = true
+      diagnosticsCollector.add({
+        source: 'audio.recorder',
+        type: 'recording.started.testMode'
+      })
+      diagnosticsCollector.updateState({ audio: { recording: true } })
+      speechDetector.reset()
+      pcmPipeline.reset()
+      logger.info('audio.recording.started.testMode')
+      return
+    }
+
     logger.info('audio.recording.starting')
 
     try {
@@ -48,7 +68,10 @@ export class AudioRecorder {
 
       this.workletNode.port.onmessage = (event) => {
         if (event.data.type === 'pcm') {
-          this.onPcmData(event.data.seq as number, event.data.data as Float32Array)
+          pcmPipeline.processWorkletFrame(
+            event.data.seq as number,
+            event.data.data as Float32Array
+          )
         }
       }
 
@@ -61,57 +84,13 @@ export class AudioRecorder {
         type: 'recording.started'
       })
       diagnosticsCollector.updateState({ audio: { recording: true } })
+      speechDetector.reset()
+      pcmPipeline.reset()
       logger.info('audio.recording.started', { state: 'recording' })
     } catch (error) {
       logger.error('audio.recording.error', { error: String(error) })
       throw error
     }
-  }
-
-  private onPcmData(seq: number, float32Data: Float32Array): void {
-    if (!this._isRecording) return
-
-    // Feed to SpeechDetector for speech detection (VAD)
-    speechDetector.onFrame(float32Data)
-
-    // Compute RMS for UI
-    let sum = 0
-    for (let i = 0; i < float32Data.length; i++) {
-      sum += float32Data[i] * float32Data[i]
-    }
-    const rms = Math.sqrt(sum / float32Data.length)
-    const hasVoice = rms > 0.01
-
-    logger.debug('audio.pcm', { 
-      rms: rms.toFixed(4), 
-      hasVoice, 
-      samples: float32Data.length,
-      isRecording: this._isRecording 
-    })
-
-    // Update UI volume indicator
-    if (this.audioLevelCallback) {
-      this.audioLevelCallback(hasVoice ? 50 : 0)
-    }
-
-    // Always send PCM - SpeechDetector manages turn lifecycle
-    const pcmData = this.float32ToInt16Pcm(float32Data)
-    binaryTransport.sendFrame({ seq, pcm: pcmData })
-  }
-
-  private float32ToInt16Pcm(float32Data: Float32Array): Uint8Array {
-    const int16Array = new Int16Array(float32Data.length)
-    for (let i = 0; i < float32Data.length; i++) {
-      const sample = Math.max(-1, Math.min(1, float32Data[i]))
-      int16Array[i] = sample < 0 ? sample * 32768 : sample * 32767
-    }
-
-    const uint8Array = new Uint8Array(int16Array.length * 2)
-    for (let i = 0; i < int16Array.length; i++) {
-      uint8Array[i * 2] = int16Array[i] & 0xFF
-      uint8Array[i * 2 + 1] = (int16Array[i] >> 8) & 0xFF
-    }
-    return uint8Array
   }
 
   async stop(): Promise<void> {
@@ -165,6 +144,19 @@ export class AudioRecorder {
 
   isRecording(): boolean {
     return this._isRecording
+  }
+
+  injectPcmData(float32Data: Float32Array): void {
+    if (!this._isRecording) {
+      logger.warn('audio.inject.ignored.not.recording')
+      return
+    }
+    if (!this._testMode) {
+      logger.warn('audio.inject.ignored.not.testMode')
+      return
+    }
+    logger.debug('audio.inject.pcm', { samples: float32Data.length })
+    pcmPipeline.processTestFrame(float32Data)
   }
 }
 

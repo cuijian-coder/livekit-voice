@@ -7,6 +7,7 @@ export interface VoiceContext {
   requestId: string;
   abortController?: AbortController;
   error?: string;
+  toastMessage?: string;
 }
 
 export function createInitialContext(): VoiceContext {
@@ -19,6 +20,7 @@ export function createInitialContext(): VoiceContext {
     requestId: generateRequestId(),
     abortController: undefined,
     error: undefined,
+    toastMessage: undefined,
   };
 }
 

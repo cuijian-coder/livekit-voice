@@ -210,6 +210,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
 
       this.logger.info({ sessionId: this.sessionId }, 'tts.complete')
       this.actor.send({ type: 'SPEAK_COMPLETE' })
+      this.send({ type: SERVER_EVENTS.TTS_COMPLETE })
       this.sendPlaybackCompleted(false)
     } catch (err) {
       if ((err as Error).name === 'AbortError') return

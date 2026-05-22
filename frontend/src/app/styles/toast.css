@@ -1,0 +1,29 @@
+.toast-container {
+  position: fixed;
+  top: 33vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  background: #f59e0b;
+  color: #1f2937;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.toast--visible {
+  opacity: 1;
+  transform: translateY(0);
+}

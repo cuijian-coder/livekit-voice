@@ -3,7 +3,7 @@ import { createNewRequestId } from './voice-context';
 
 export const voiceActions = {
   setTranscript: assign({
-    transcript: ({ event }: { event: { transcript: string } }) => event.transcript,
+    transcript: ({ event }: { event: { text: string } }) => event.text,
   }),
 
   setPartialTranscript: assign({

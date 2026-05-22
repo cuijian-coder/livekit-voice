@@ -203,14 +203,14 @@ export class MockAsrWorker implements AsrWorker {
       chunks.push(chunk)
       yield { text: `[partial ${chunks.length}]`, isFinal: false }
     }
-    if (signal.aborted) return
-    const audioData = Buffer.concat(chunks)
-    yield { text: `[mock ASR result: ${audioData.length} bytes]`, isFinal: true }
+    if (chunks.length > 0) {
+      yield { text: '北京的天气', isFinal: true }
+    }
   }
 
   async transcribe(audioData: Buffer, signal: AbortSignal, logger?: Logger): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 100))
     if (signal.aborted) throw new Error('aborted')
-    return `[transcribed: ${audioData.length} bytes]`
+    return '北京的天气'
   }
 }

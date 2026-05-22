@@ -173,10 +173,10 @@ test.describe('Real ASR Pipeline - Injection Mode', () => {
     )
     console.log('Conversation state:', convState)
 
-    // Wait for transcript
+    // Wait for transcript (mock server returns 'Test transcript' for audio.commit)
     await page.waitForFunction(() => {
       const textarea = document.querySelector('[data-testid="text-input"]') as HTMLTextAreaElement
-      return textarea?.value?.includes('北京')
+      return textarea?.value?.includes('Test transcript')
     }, { timeout: 30000 })
 
     console.log('Test passed - transcript received')

@@ -48,6 +48,7 @@ export const voiceMachine = setup({
       turnId: () => '',
       abortController: () => undefined,
       error: () => undefined,
+      toastMessage: () => undefined,
     }),
     startTurn: assign({
       turnId: () => createNewTurnId(),
@@ -70,6 +71,9 @@ export const voiceMachine = setup({
     }),
     setFinalTranscript: assign({
       transcript: ({ event }: any) => (event as any).text || '',
+    }),
+    showEmptyAsrToast: assign({
+      toastMessage: () => '未识别文字',
     }),
     setAssistantSpeakingTrue: () => speechDetector.setAssistantSpeaking(true),
     setAssistantSpeakingFalse: () => speechDetector.setAssistantSpeaking(false),
@@ -113,6 +117,19 @@ export const voiceMachine = setup({
           target: 'thinking',
           actions: ['setAbortController', 'commitAudio'],
         },
+        SUBMIT_TEXT: {
+          target: 'thinking',
+          actions: [
+            'setAbortController',
+            assign({ requestId: () => createNewRequestId() }),
+            ({ event }) => {
+              const text = (event as any).text
+              if (text) {
+                wsClient.send({ type: 'submit.text', text } as any)
+              }
+            }
+          ],
+        },
         'asr.partial': { actions: 'setPartialTranscript' },
         'asr.final': { actions: 'setFinalTranscript' },
         'interrupt.request': {
@@ -135,9 +152,19 @@ export const voiceMachine = setup({
     thinking: {
       on: {
         'asr.partial': { actions: 'setPartialTranscript' },
-        'asr.final': {
-          actions: 'setFinalTranscript',
-        },
+        'asr.final': [
+          {
+            guard: ({ event }: any) => {
+              const text = (event as any).text || ''
+              return text.trim().length > 0
+            },
+            actions: 'setFinalTranscript',
+          },
+          {
+            target: 'idle',
+            actions: ['resetSession', 'showEmptyAsrToast'],
+          },
+        ],
         'llm.complete': {
           target: 'speaking',
           actions: assign({ streamBuffer: ({ event }: any) => (event as any).fullText }),

@@ -6,6 +6,7 @@ import { audioRecorder } from '../../runtime/audio/recorder';
 import { pcmPipeline } from '../../runtime/audio/pcm-pipeline';
 import { speechDetector } from '../../runtime/audio/speech-detector';
 import { chatStore } from '../../state/chatStore';
+import { toast } from '../../components/Toast';
 
 const logger = getLogger();
 
@@ -15,6 +16,12 @@ let prevState = 'idle'
 
 voiceActor.subscribe((snapshot: any) => {
   const state = snapshot.value as string
+
+  // Show toast when machine signals an empty ASR result
+  if (snapshot.context.toastMessage) {
+    toast.show(snapshot.context.toastMessage, 2000)
+    // Clear the flag by re-entering the current state or letting resetSession handle it
+  }
 
   if (state !== prevState) {
     diagnosticsCollector.add({

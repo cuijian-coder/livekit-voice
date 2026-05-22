@@ -5,10 +5,12 @@ import { ttsPlayback } from './runtime/audio/playback';
 import { utteranceManager } from './runtime/audio/utterance-manager';
 import { voiceActor } from './voice/providers/voice-provider';
 import { getLogger } from '@livekit-voice/shared/logger';
+import { LOG_LEVEL } from './runtime/config';
 
 import './runtime/debug-provider'
 
 const logger = getLogger()
+logger.setMinLevel(LOG_LEVEL)
 
 export class App {
   private root: HTMLElement;

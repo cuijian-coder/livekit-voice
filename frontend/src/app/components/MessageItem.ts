@@ -25,6 +25,9 @@ export class MessageItem {
   }
 
   private render(message: ChatMessage): void {
+    // Set message ID on the element for E2E testing
+    this.element.setAttribute('data-message-id', message.id);
+
     const avatar = createElement('div', 'message__avatar');
     avatar.textContent = message.role === 'user' ? 'U' : 'A';
 
@@ -46,6 +49,9 @@ export class MessageItem {
     const actionBar = createElement('div', 'message__action-bar');
     
     const readAloudBtn = createElement('button', 'read-aloud-btn');
+    readAloudBtn.setAttribute('data-testid', 'read-aloud-btn');
+    readAloudBtn.setAttribute('data-message-id', this.messageId);
+    readAloudBtn.setAttribute('data-playing', 'false');
     readAloudBtn.innerHTML = this.getSpeakerIcon();
     readAloudBtn.title = 'Read aloud';
     readAloudBtn.addEventListener('click', (e) => {
@@ -112,12 +118,16 @@ export class MessageItem {
     const btn = this.element.querySelector('.read-aloud-btn') as HTMLButtonElement | null;
     if (!btn) return;
     
+    btn.setAttribute('data-playing', String(this.isPlaying));
+    
     if (this.isPlaying) {
       btn.innerHTML = this.getStopIcon();
       btn.classList.add('read-aloud-btn--playing');
+      btn.title = 'Stop playback';
     } else {
       btn.innerHTML = this.getSpeakerIcon();
       btn.classList.remove('read-aloud-btn--playing');
+      btn.title = 'Read aloud';
     }
   }
 

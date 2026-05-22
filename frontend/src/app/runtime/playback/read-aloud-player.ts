@@ -130,3 +130,14 @@ export class ReadAloudPlayer {
 }
 
 export const readAloudPlayer = new ReadAloudPlayer()
+
+// Expose to window for E2E testing (DEV only)
+declare global {
+  interface Window {
+    __READALOUD_PLAYER__?: typeof readAloudPlayer
+  }
+}
+
+if (import.meta.env.DEV) {
+  window.__READALOUD_PLAYER__ = readAloudPlayer
+}

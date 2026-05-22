@@ -1,15 +1,29 @@
 import { RingBuffer } from '../ring-buffer'
 import type { LogEvent, LogLevel } from './types'
+import { LOG_LEVEL_ORDER } from './types'
 
 export class Logger {
   private buffer = new RingBuffer<LogEvent>(200)
   private requestId: string | undefined
+  private minLevel: LogLevel = 'debug'
 
   setRequestId(id: string) {
     this.requestId = id
   }
 
+  setMinLevel(level: LogLevel) {
+    this.minLevel = level
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const minIndex = LOG_LEVEL_ORDER.indexOf(this.minLevel)
+    const levelIndex = LOG_LEVEL_ORDER.indexOf(level)
+    return levelIndex >= minIndex
+  }
+
   private log(level: LogLevel, event: string, data?: unknown) {
+    if (!this.shouldLog(level)) return
+
     const entry: LogEvent = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),

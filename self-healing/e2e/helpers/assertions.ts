@@ -116,3 +116,40 @@ export async function expectRuntimeState(
     expect(diagnostics?.audio?.playing).toBe(expected.audioState === 'playing')
   }
 }
+
+// Read Aloud assertions
+export async function expectReadAloudPlaying(
+  page: Page,
+  messageId: string
+): Promise<void> {
+  const btn = page.locator(`[data-message-id="${messageId}"] [data-testid="read-aloud-btn"]`)
+  await expect(btn).toHaveAttribute('data-playing', 'true')
+}
+
+export async function expectReadAloudStopped(
+  page: Page,
+  messageId: string
+): Promise<void> {
+  const btn = page.locator(`[data-message-id="${messageId}"] [data-testid="read-aloud-btn"]`)
+  await expect(btn).toHaveAttribute('data-playing', 'false')
+}
+
+export async function getReadAloudState(page: Page): Promise<any> {
+  return page.evaluate(() => {
+    return (window as any).__READALOUD_STORE__?.getState?.() ?? null
+  })
+}
+
+export async function getReadAloudPlayerState(page: Page): Promise<any> {
+  return page.evaluate(() => {
+    const player = (window as any).__READALOUD_PLAYER__
+    if (!player) return null
+    return {
+      isActive: player.isActive?.(),
+      currentMessageId: player.getCurrentMessageId?.(),
+      audioContextState: player.audioContext?.state,
+      queueLength: player.audioQueue?.length ?? 0,
+      isPlaying: player.isPlaying
+    }
+  })
+}

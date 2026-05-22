@@ -1,4 +1,6 @@
 import { WebSocket, WebSocketServer } from 'ws'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 
 export type MockWsEvent =
   | { type: 'asr.partial'; text: string; turnId: string; seq: number }
@@ -9,6 +11,8 @@ export type MockWsEvent =
   | { type: 'tts.started' }
   | { type: 'tts.chunk'; size: number }
   | { type: 'tts.complete' }
+  | { type: 'readAloud.started'; messageId: string }
+  | { type: 'readAloud.complete'; messageId: string }
   | { type: 'state.update'; state: string; turnId: string }
   | { type: 'session.started'; sessionId: string; state: string }
   | { type: 'playback.completed'; turnId: string; interrupted: boolean }
@@ -47,10 +51,9 @@ export class MockWsServer {
           ws.on('message', (data) => {
             try {
               const msg = JSON.parse(data.toString())
-              console.log('[MockWs] Received:', msg.type)
               this.handleMessage(ws, msg)
             } catch {
-              console.error('[MockWs] Failed to parse message')
+              // Ignore non-JSON messages (e.g., binary audio frames)
             }
           })
 
@@ -92,17 +95,27 @@ export class MockWsServer {
           this.broadcast({ type: 'llm.token', token: 'Hello' })
           setTimeout(() => {
             this.broadcast({ type: 'llm.complete', fullText: 'Hello, how can I help you?' })
+            // Simulate TTS completion to return to idle
+            setTimeout(() => {
+              this.broadcast({ type: 'tts.complete' })
+              this.broadcast({ type: 'state.update', state: 'idle', turnId: '' })
+            }, 500)
           }, 100)
         }, 100)
         break
 
       case 'submit.text':
-        this.broadcast({ type: 'asr.final', text: msg.text, turnId: 'mock-turn' })
+        // Text submission does not send asr.final (no speech recognition needed)
         setTimeout(() => {
           this.broadcast({ type: 'llm.started' })
           this.broadcast({ type: 'llm.token', token: 'Response' })
           setTimeout(() => {
             this.broadcast({ type: 'llm.complete', fullText: 'This is a mock response.' })
+            // Simulate TTS completion to return to idle
+            setTimeout(() => {
+              this.broadcast({ type: 'tts.complete' })
+              this.broadcast({ type: 'state.update', state: 'idle', turnId: '' })
+            }, 500)
           }, 100)
         }, 100)
         break
@@ -112,12 +125,51 @@ export class MockWsServer {
         this.broadcast({ type: 'playback.completed', turnId: 'mock-turn', interrupted: true })
         break
 
+      case 'readAloud.start':
+        this.handleReadAloudStart(ws, msg.messageId, msg.text)
+        break
+
       case 'ping':
         this.broadcast({ type: 'pong' })
         break
 
       default:
         console.log('[MockWs] Unhandled message type:', msg.type)
+    }
+  }
+
+  private async handleReadAloudStart(ws: WebSocket, messageId: string, text: string): Promise<void> {
+    console.log('[MockWs] Read Aloud start:', messageId, text.slice(0, 50))
+    
+    // Send started event
+    this.broadcast({ type: 'readAloud.started', messageId })
+    
+    try {
+      // Read wav file and send as binary chunks
+      const wavPath = resolve(process.cwd(), 'self-healing/e2e/fixtures/audio/nls-sample-16k.wav')
+      const wavBuffer = readFileSync(wavPath)
+      
+      // Extract PCM data from WAV (skip header)
+      // WAV header is typically 44 bytes
+      const pcmData = wavBuffer.slice(44)
+      const chunkSize = 2048
+      
+      // Send chunks with small delay
+      for (let offset = 0; offset < pcmData.length; offset += chunkSize) {
+        const chunk = pcmData.slice(offset, Math.min(offset + chunkSize, pcmData.length))
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(chunk, { binary: true })
+        }
+        // Small delay between chunks
+        await new Promise(r => setTimeout(r, 50))
+      }
+      
+      // Send complete event
+      this.broadcast({ type: 'readAloud.complete', messageId })
+      console.log('[MockWs] Read Aloud complete:', messageId)
+    } catch (err) {
+      console.error('[MockWs] Read Aloud error:', err)
+      this.broadcast({ type: 'runtime.error', error: 'Read Aloud failed', code: 4004 } as any)
     }
   }
 
