@@ -9,8 +9,8 @@ import { PlaybackQueue } from '../playback/playback-queue.js'
 import type { BackendDiagnosticsCollector } from '../diagnostics-collector.js'
 import { SessionEventBus } from '@livekit-voice/shared'
 import { nanoid } from 'nanoid'
-import { QwenAsrWorker } from '../../workers/asr/qwen-asr.worker.js'
-import { QwenLlmWorker } from '../../workers/llm/qwen-llm.worker.js'
+import { QwenAsrWorker, MockAsrWorker } from '../../workers/asr/qwen-asr.worker.js'
+import { QwenLlmWorker, MockLlmWorker } from '../../workers/llm/qwen-llm.worker.js'
 import { NlsGatewayTtsWorker } from '../../workers/tts/nls-gateway-tts.worker.js'
 import { AliyunStreamingTtsWorker } from '../../workers/tts/aliyun-streaming-tts.worker.js'
 import { getConfig } from '../../infra/config/config.js'
@@ -35,8 +35,20 @@ export class VoiceSession {
   private _state: ConversationState = CONVERSATION_STATES.IDLE
   private abortController = new AbortController()
 
-  private asrWorker = new QwenAsrWorker()
-  private llmWorker = new QwenLlmWorker()
+  private asrWorker = (() => {
+    const cfg = getConfig()
+    if (cfg.QWEN_API_KEY === 'test') {
+      return new MockAsrWorker()
+    }
+    return new QwenAsrWorker()
+  })()
+  private llmWorker = (() => {
+    const cfg = getConfig()
+    if (cfg.QWEN_API_KEY === 'test') {
+      return new MockLlmWorker()
+    }
+    return new QwenLlmWorker()
+  })()
   private asrFrameQueue: Buffer[] = []
   private asrStreamController: AbortController | null = null
   private asrStreamTask: Promise<void> | null = null
@@ -74,6 +86,7 @@ export class VoiceSession {
 
 this.actor.subscribe((snapshot: any) => {
       const newState = snapshot.value as ConversationState
+      this.logger.debug({ sessionId: this.sessionId, newState, oldState: this._state }, 'actor.subscribe callback')
       if (newState !== this._state) {
         const fromState = this._state
         this.diagnostics.add({
@@ -93,35 +106,40 @@ this.actor.subscribe((snapshot: any) => {
 
   private onStateChange(state: ConversationState): void {
     if (state === s.THINKING) {
-      this.logger.info({ sessionId: this.sessionId }, 'llm.will_start')
       this.runLlm().catch((err) => this.handleError('llm', err))
     }
   }
 
   private async runLlm(): Promise<void> {
-    invariant(this.currentTurnId !== '', 'turnId required before llm streaming')
-    const signal = this.abortController.signal
-    if (signal.aborted) {
-      this.logger.warn({ sessionId: this.sessionId }, 'llm.start.aborted')
-      return
-    }
+    try {
+      if (!this.currentTurnId) {
+        this.currentTurnId = `llm-turn-${Date.now()}`
+      }
+      const signal = this.abortController.signal
+      if (signal.aborted) {
+        this.logger.warn({ sessionId: this.sessionId }, 'llm.start.aborted')
+        return
+      }
 
-    this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript }, 'llm.started')
+this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript }, 'llm.started')
+    this.logger.info({ sessionId: this.sessionId, wsReadyState: this.ws.readyState }, 'ws_state_before_llm_start')
     this.send({ type: SERVER_EVENTS.LLM_STARTED })
 
-    this.diagnostics.add({
-      source: 'llm',
-      type: 'stream.started',
-      turnId: this.currentTurnId || undefined
-    })
+      this.diagnostics.add({
+        source: 'llm',
+        type: 'stream.started',
+        turnId: this.currentTurnId || undefined
+      })
 
-    const llmStartTime = Date.now()
-    let tokenCount = 0
+      const llmStartTime = Date.now()
+      let tokenCount = 0
 
-    try {
       let fullResponse = ''
       for await (const token of this.llmWorker.stream(this.currentTranscript || '你好', signal, this.logger)) {
-        if (signal.aborted) return
+        if (signal.aborted) {
+          this.logger.info({ sessionId: this.sessionId }, 'llm.stream.aborted.by_signal')
+          return
+        }
         fullResponse += token
         tokenCount++
         this.send({ type: SERVER_EVENTS.LLM_TOKEN, token })
@@ -145,6 +163,7 @@ this.actor.subscribe((snapshot: any) => {
       })
 
       this.logger.info({ sessionId: this.sessionId, responseLength: fullResponse.length }, 'llm.complete')
+      this.send({ type: SERVER_EVENTS.LLM_COMPLETE })
       this.actor.send({ type: 'LLM_COMPLETE' })
       await this.runTts(fullResponse)
     } catch (err) {
@@ -316,11 +335,13 @@ this.actor.subscribe((snapshot: any) => {
   private createFrameStream(): AsyncIterable<Buffer> {
     return {
       [Symbol.asyncIterator]: () => {
-        let index = 0
         return {
           next: async (): Promise<IteratorResult<Buffer>> => {
             while (this.asrFrameQueue.length === 0) {
               if (this.asrStreamController?.signal.aborted) {
+                return { done: true, value: Buffer.alloc(0) }
+              }
+              if (this.asrStreamController === null) {
                 return { done: true, value: Buffer.alloc(0) }
               }
               await new Promise(resolve => setTimeout(resolve, 10))
@@ -377,14 +398,25 @@ this.actor.subscribe((snapshot: any) => {
 
     this.logger.info({ sessionId: this.sessionId }, 'asr.stream.finalized')
     this.actor.send({ type: 'ASR_COMPLETE', text: '' })
-    this.stopStreamingAsr()
+
+    this.asrStreamTask = null
+    this.asrStreamController = null
   }
 
   private handleTextSubmit(text: string): void {
     if (!text || this.abortController.signal.aborted) return
     this.currentTranscript = text
+    if (!this.currentTurnId) {
+      this.currentTurnId = `text-turn-${Date.now()}`
+    }
     this.send({ type: SERVER_EVENTS.ASR_FINAL, text })
+    this.logger.info({ sessionId: this.sessionId, state: this._state }, 'sending ASR_COMPLETE to actor')
     this.actor.send({ type: 'ASR_COMPLETE', text })
+    this.logger.info({ sessionId: this.sessionId }, 'ASR_COMPLETE sent')
+
+    // DEBUG: Check actor state after sending
+    const snapshot = this.actor.getSnapshot()
+    this.logger.info({ sessionId: this.sessionId, actorState: snapshot.value }, 'actor_state_after_asr_complete')
   }
 
   private async startTranscribingWithAudio(audioData: Buffer): Promise<void> {

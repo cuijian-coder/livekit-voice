@@ -3,6 +3,9 @@ import { chatStore } from '../state/chatStore';
 import type { ChatMessage } from '../types/chat';
 import { MessageItem } from './MessageItem';
 import { TypingIndicator } from './TypingIndicator';
+import { getLogger } from '@livekit-voice/shared/logger';
+
+const logger = getLogger()
 
 export class MessageList {
   private element: HTMLElement;
@@ -30,6 +33,7 @@ export class MessageList {
   }
 
   private update(messages: ChatMessage[]): void {
+    logger.debug('message_list_update', { count: messages.length, roles: messages.map(m => m.role) })
     const typingEl = this.typingIndicator.getElement();
 
     const currentIds = new Set(messages.map((m) => m.id));
@@ -43,6 +47,7 @@ export class MessageList {
     messages.forEach((msg) => {
       let item = this.messageItems.get(msg.id);
       if (!item) {
+        logger.debug('message_list_create_item', { role: msg.role, id: msg.id })
         item = new MessageItem(msg);
         this.element.insertBefore(item.getElement(), typingEl);
         this.messageItems.set(msg.id, item);

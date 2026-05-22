@@ -36,11 +36,13 @@ export const conversationMachine = createMachine({
       on: {
         START: s.LISTENING,
         RESET: s.IDLE,
+        ASR_COMPLETE: s.THINKING,
       },
     },
     [s.LISTENING]: {
       on: {
         VAD_END: s.TRANSCRIBING,
+        ASR_COMPLETE: s.THINKING,
         INTERRUPT: s.INTERRUPTING,
         RESET: s.IDLE,
       },

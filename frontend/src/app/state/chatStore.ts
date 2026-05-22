@@ -1,5 +1,8 @@
 import type { ChatMessage, ChatState } from '../types/chat';
 import { generateId } from '../utils/id';
+import { getLogger } from '@livekit-voice/shared/logger';
+
+const logger = getLogger()
 
 type Listener = (_state: ChatState) => void;
 
@@ -47,7 +50,9 @@ class ChatStore {
   }
 
   removeMessage(id: string): void {
+    logger.debug('chat_store_remove_message', { id, countBefore: this.state.messages.length })
     this.state.messages = this.state.messages.filter((m) => m.id !== id);
+    logger.debug('chat_store_after_remove', { countAfter: this.state.messages.length })
     this.notify();
   }
 
