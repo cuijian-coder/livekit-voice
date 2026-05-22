@@ -60,11 +60,19 @@ export const voiceMachine = setup({
     }),
     startTurnTransport: ({ context }) => {
       invariant(context.turnId !== '', 'turnId required before startTurnTransport')
-      binaryTransport.startTurn(context.turnId)
+      // Only send audio.start here. binaryTransport is started by UtteranceManager
+      // when VAD detects SPEAKING, so we never crash if user stops without speaking.
+      wsClient.send({ type: 'audio.start', turnId: context.turnId } as any)
     },
-    commitAudio: async ({ context }) => {
-      await binaryTransport.flush()
-      await binaryTransport.commit()
+    commitAudio: async () => {
+      try {
+        await binaryTransport.flush()
+        await binaryTransport.commit()
+      } catch {
+        // binaryTransport may never have been started if user stopped without speaking.
+        // UtteranceManager only starts it on VAD SPEAKING.
+        logger.warn('audio.commit.noop', { reason: 'binaryTransport not started' })
+      }
     },
     setPartialTranscript: assign({
       partialTranscript: ({ event }: any) => (event as any).text || '',
@@ -90,9 +98,6 @@ export const voiceMachine = setup({
           actions: [
             'startTurn',
             'startTurnTransport',
-            ({ context }) => {
-              wsClient.send({ type: 'audio.start', turnId: context.turnId } as any)
-            }
           ],
         },
         SUBMIT_TEXT: {
@@ -112,9 +117,10 @@ export const voiceMachine = setup({
     },
     listening: {
       entry: () => startAudioRecording(),
+      exit: () => stopAudioRecording(),
       on: {
         'audio.commit': {
-          target: 'thinking',
+          target: 'transcribing',
           actions: ['setAbortController', 'commitAudio'],
         },
         SUBMIT_TEXT: {
@@ -140,6 +146,20 @@ export const voiceMachine = setup({
     },
     transcribing: {
       on: {
+        'asr.final': [
+          {
+            guard: ({ event }: any) => {
+              const text = (event as any).text || ''
+              return text.trim().length > 0
+            },
+            target: 'thinking',
+            actions: 'setFinalTranscript',
+          },
+          {
+            target: 'idle',
+            actions: ['resetSession', 'showEmptyAsrToast'],
+          },
+        ],
         'llm.started': { target: 'thinking' },
         'asr.partial': { actions: 'setPartialTranscript' },
         'interrupt.request': { target: 'idle', actions: 'resetSession' },

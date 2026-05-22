@@ -54,16 +54,6 @@ export function selectActionButton(
     };
   }
 
-  if (hasInput) {
-    return {
-      semantic: 'send',
-      label: BUTTON_LABELS.send,
-      className: BUTTON_CLASSES.send,
-      pulse: false,
-      disabled: isProcessing,
-    };
-  }
-
   if (state === s.LISTENING) {
     return {
       semantic: 'stop-recording',
@@ -74,7 +64,27 @@ export function selectActionButton(
     };
   }
 
-  if (state === s.THINKING || state === s.SPEAKING || state === s.TRANSCRIBING) {
+  if (state === s.TRANSCRIBING) {
+    return {
+      semantic: 'loading',
+      label: BUTTON_LABELS.loading,
+      className: BUTTON_CLASSES.loading,
+      pulse: false,
+      disabled: false,
+    };
+  }
+
+  if (hasInput) {
+    return {
+      semantic: 'send',
+      label: BUTTON_LABELS.send,
+      className: BUTTON_CLASSES.send,
+      pulse: false,
+      disabled: isProcessing,
+    };
+  }
+
+  if (state === s.THINKING || state === s.SPEAKING) {
     return {
       semantic: 'interrupt',
       label: BUTTON_LABELS.interrupt,

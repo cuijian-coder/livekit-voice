@@ -61,11 +61,11 @@ describe('voiceMachine', () => {
     expect(snapshot.value).toBe('listening')
   })
 
-  it('should transition to thinking on audio.commit', () => {
+  it('should transition to transcribing on audio.commit', () => {
     actor.send({ type: 'session.start' })
     actor.send({ type: 'audio.commit' })
     const snapshot = actor.getSnapshot()
-    expect(snapshot.value).toBe('thinking')
+    expect(snapshot.value).toBe('transcribing')
   })
 
   it('should transition to thinking on SUBMIT_TEXT', () => {
@@ -252,6 +252,8 @@ describe('voiceMachine', () => {
       expect(actor.getSnapshot().value).toBe('listening')
 
       actor.send({ type: 'audio.commit' })
+      actor.send({ type: 'asr.final', text: 'second' })
+      expect(actor.getSnapshot().value).toBe('thinking')
       actor.send({ type: 'llm.complete', fullText: 'second response' })
       actor.send({ type: 'tts.complete' })
       expect(actor.getSnapshot().value).toBe('listening')

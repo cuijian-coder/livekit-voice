@@ -48,18 +48,27 @@ describe('selectActionButton', () => {
       expect(result.disabled).toBe(false)
     })
 
-    it('should return send if has input even in listening', () => {
+    it('should return stop-recording even if has input in listening', () => {
       const snapshot = createSnapshot('listening')
       const result = selectActionButton(snapshot, true)
-      expect(result.semantic).toBe('send')
+      expect(result.semantic).toBe('stop-recording')
+      expect(result.pulse).toBe(true)
+      expect(result.disabled).toBe(false)
     })
   })
 
   describe('transcribing state', () => {
-    it('should return interrupt button', () => {
+    it('should return loading button', () => {
       const snapshot = createSnapshot('transcribing')
       const result = selectActionButton(snapshot, false)
-      expect(result.semantic).toBe('interrupt')
+      expect(result.semantic).toBe('loading')
+      expect(result.disabled).toBe(false)
+    })
+
+    it('should return loading even if has input in transcribing', () => {
+      const snapshot = createSnapshot('transcribing')
+      const result = selectActionButton(snapshot, true)
+      expect(result.semantic).toBe('loading')
       expect(result.disabled).toBe(false)
     })
   })

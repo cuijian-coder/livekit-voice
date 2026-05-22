@@ -1,5 +1,5 @@
 import { getLogger } from '@livekit-voice/shared/logger'
-import { speechDetector } from './speech-detector'
+import { speechDetector, type SpeechState } from './speech-detector'
 import { binaryTransport } from '../transport'
 
 const logger = getLogger()
@@ -10,6 +10,11 @@ export interface PcmFrame {
   sampleRate: number
   timestamp: number
   source: 'worklet' | 'test-injection'
+}
+
+interface CachedFrame {
+  seq: number
+  pcm: Uint8Array
 }
 
 export class PcmPipeline {
@@ -26,6 +31,15 @@ export class PcmPipeline {
   }
 
   /**
+   * Pre-roll ring buffer: cache frames while VAD is IDLE.
+   * Flushed to transport on first SPEAKING transition.
+   * ~500ms @ 20ms/frame = 25 frames.
+   */
+  private preRollBuffer: CachedFrame[] = []
+  private readonly PRE_ROLL_MAX_FRAMES = 25
+  private prevVadState: SpeechState = 'IDLE'
+
+  /**
    * CANONICAL ENTRY POINT - All PCM sources flow through this method
    * @param frame - PcmFrame from any source (worklet, test, replay)
    */
@@ -37,32 +51,52 @@ export class PcmPipeline {
     this.diagnostics.lastSource = frame.source
     this.diagnostics.lastStage = 'pcm'
 
-    logger.debug('pipeline.pcm', {
-      seq,
-      samples: frame.samples.length,
-      source: frame.source
-    })
-
     const vadState = speechDetector.onFrame(frame.samples)
     this.diagnostics.lastVadState = vadState
     this.diagnostics.vadFramesProcessed++
     this.diagnostics.lastStage = 'vad'
 
-    logger.debug('pipeline.vad', { state: vadState })
-
-    let sum = 0
-    for (let i = 0; i < frame.samples.length; i++) {
-      sum += frame.samples[i] * frame.samples[i]
-    }
-    const rms = Math.sqrt(sum / frame.samples.length)
-    const hasVoice = rms > 0.01
-
     const pcmData = this.float32ToInt16(frame.samples)
-    binaryTransport.sendFrame({ seq, pcm: pcmData })
+
+    if (vadState === 'SPEAKING') {
+      if (this.prevVadState !== 'SPEAKING') {
+        // First real speech detected — flush pre-roll so ASR has context
+        this.flushPreRoll()
+      }
+      this.sendFrame(seq, pcmData)
+    } else if (vadState === 'POSSIBLE_END' || vadState === 'INTERRUPTING') {
+      // Silence / interruption: discard cached frames, do not send silence
+      this.clearPreRoll()
+    } else {
+      // IDLE: buffer for pre-roll context, do not push yet
+      this.addToPreRoll(seq, pcmData)
+    }
+
+    this.prevVadState = vadState
+  }
+
+  private sendFrame(seq: number, pcm: Uint8Array): void {
+    binaryTransport.sendFrame({ seq, pcm })
     this.diagnostics.transportFramesSent++
     this.diagnostics.lastStage = 'transport'
+  }
 
-    logger.debug('pipeline.transport.send', { seq, pcmSize: pcmData.length })
+  private addToPreRoll(seq: number, pcm: Uint8Array): void {
+    this.preRollBuffer.push({ seq, pcm })
+    if (this.preRollBuffer.length > this.PRE_ROLL_MAX_FRAMES) {
+      this.preRollBuffer.shift()
+    }
+  }
+
+  private flushPreRoll(): void {
+    for (const cached of this.preRollBuffer) {
+      this.sendFrame(cached.seq, cached.pcm)
+    }
+    this.preRollBuffer = []
+  }
+
+  private clearPreRoll(): void {
+    this.preRollBuffer = []
   }
 
   processWorkletFrame(seq: number, samples: Float32Array): void {
@@ -117,6 +151,8 @@ export class PcmPipeline {
     this.diagnostics.lastStage = 'idle'
     this.diagnostics.lastSource = 'worklet'
     this.diagnostics.lastVadState = 'IDLE'
+    this.preRollBuffer = []
+    this.prevVadState = 'IDLE'
   }
 }
 

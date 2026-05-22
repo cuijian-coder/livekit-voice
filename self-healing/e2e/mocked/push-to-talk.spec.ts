@@ -40,7 +40,7 @@ test.describe('Push-to-Talk', () => {
     await page.waitForTimeout(500)
 
     await page.getByTestId('push-to-talk').click({ force: true })
-    await expectConversationState(page, 'thinking')
+    await expectConversationState(page, 'transcribing')
     await expectAudioState(page, 'idle')
   })
 })

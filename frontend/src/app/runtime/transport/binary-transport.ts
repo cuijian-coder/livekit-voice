@@ -61,12 +61,16 @@ export class BinaryTransport {
   }
 
   async commit(): Promise<void> {
-    invariant(this.isActive, 'binaryTransport must be active before commit')
-    invariant(this.currentTurnId !== '', 'turnId required before commit')
-    invariant(this.lastSeq >= 0, 'at least one frame must be sent before commit')
-
-    if (!this.isActive || !this.currentTurnId) {
-      logger.warn('binaryTransport.commit.ignored')
+    if (!this.isActive) {
+      logger.warn('binaryTransport.commit.ignored.notActive')
+      return
+    }
+    if (!this.currentTurnId) {
+      logger.warn('binaryTransport.commit.ignored.noTurnId')
+      return
+    }
+    if (this.lastSeq < 0) {
+      logger.warn('binaryTransport.commit.ignored.noFrames')
       return
     }
 

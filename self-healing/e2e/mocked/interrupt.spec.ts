@@ -18,7 +18,7 @@ test.describe('Interrupt', () => {
 
     await clickPushToTalk(page)
     await expectAudioState(page, 'idle')
-    await expectConversationState(page, 'thinking')
+    await expectConversationState(page, 'transcribing')
   })
 
   test('audio state clears after stopping recording', async ({ page }) => {
@@ -36,6 +36,6 @@ test.describe('Interrupt', () => {
     await clickPushToTalk(page)
     await page.waitForTimeout(300)
 
-    await expectConversationState(page, 'thinking')
+    await expectConversationState(page, 'transcribing')
   })
 })

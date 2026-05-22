@@ -25,7 +25,7 @@ export interface MockWsConfig {
 
 export class MockWsServer {
   private wss: WebSocketServer | null = null
-  private clients: Set<WebSocket> = new Set()
+  private clients: Map<WebSocket, NodeJS.Timeout[]> = new Map()
   private eventQueue: MockWsEvent[] = []
   private autoRespond = true
   private responseDelay = 100
@@ -41,11 +41,11 @@ export class MockWsServer {
         this.wss = new WebSocketServer({ port })
 
         this.wss.on('connection', (ws) => {
-          this.clients.add(ws)
+          this.clients.set(ws, [])
           console.log('[MockWs] Client connected')
 
           if (this.autoRespond) {
-            this.scheduleAutoResponse()
+            this.scheduleAutoResponse(ws)
           }
 
           ws.on('message', (data) => {
@@ -58,6 +58,7 @@ export class MockWsServer {
           })
 
           ws.on('close', () => {
+            this.clearClientTimers(ws)
             this.clients.delete(ws)
             console.log('[MockWs] Client disconnected')
           })
@@ -72,57 +73,75 @@ export class MockWsServer {
     })
   }
 
-  private scheduleAutoResponse(): void {
-    setTimeout(() => {
-      this.broadcast({ type: 'session.started', sessionId: 'mock-session', state: 'idle' })
+  private addTimer(ws: WebSocket, timer: NodeJS.Timeout): void {
+    const timers = this.clients.get(ws)
+    if (timers) timers.push(timer)
+  }
+
+  private clearClientTimers(ws: WebSocket): void {
+    const timers = this.clients.get(ws)
+    if (timers) {
+      timers.forEach(t => clearTimeout(t))
+      this.clients.set(ws, [])
+    }
+  }
+
+  private scheduleAutoResponse(ws: WebSocket): void {
+    const timer = setTimeout(() => {
+      this.send(ws, { type: 'session.started', sessionId: 'mock-session', state: 'idle' })
     }, this.responseDelay)
+    this.addTimer(ws, timer)
   }
 
   private handleMessage(ws: WebSocket, msg: any): void {
     switch (msg.type) {
       case 'session.start':
-        this.broadcast({ type: 'session.started', sessionId: 'mock-session', state: 'idle' })
+        this.send(ws, { type: 'session.started', sessionId: 'mock-session', state: 'idle' })
         break
 
       case 'audio.start':
-        this.broadcast({ type: 'state.update', state: 'listening', turnId: msg.turnId })
+        this.send(ws, { type: 'state.update', state: 'listening', turnId: msg.turnId })
         break
 
       case 'audio.commit':
-        this.broadcast({ type: 'asr.final', text: 'Test transcript', turnId: msg.turnId })
-        setTimeout(() => {
-          this.broadcast({ type: 'llm.started' })
-          this.broadcast({ type: 'llm.token', token: 'Hello' })
-          setTimeout(() => {
-            this.broadcast({ type: 'llm.complete', fullText: 'Hello, how can I help you?' })
-            // Simulate TTS completion to return to idle
-            setTimeout(() => {
-              this.broadcast({ type: 'tts.complete' })
-              this.broadcast({ type: 'state.update', state: 'idle', turnId: '' })
+        this.send(ws, { type: 'asr.final', text: 'Test transcript', turnId: msg.turnId })
+        const t1 = setTimeout(() => {
+          this.send(ws, { type: 'llm.started' })
+          this.send(ws, { type: 'llm.token', token: 'Hello' })
+          const t2 = setTimeout(() => {
+            this.send(ws, { type: 'llm.complete', fullText: 'Hello, how can I help you?' })
+            const t3 = setTimeout(() => {
+              this.send(ws, { type: 'tts.complete' })
+              this.send(ws, { type: 'state.update', state: 'idle', turnId: '' })
             }, 500)
+            this.addTimer(ws, t3)
           }, 100)
+          this.addTimer(ws, t2)
         }, 100)
+        this.addTimer(ws, t1)
         break
 
       case 'submit.text':
         // Text submission does not send asr.final (no speech recognition needed)
-        setTimeout(() => {
-          this.broadcast({ type: 'llm.started' })
-          this.broadcast({ type: 'llm.token', token: 'Response' })
-          setTimeout(() => {
-            this.broadcast({ type: 'llm.complete', fullText: 'This is a mock response.' })
-            // Simulate TTS completion to return to idle
-            setTimeout(() => {
-              this.broadcast({ type: 'tts.complete' })
-              this.broadcast({ type: 'state.update', state: 'idle', turnId: '' })
+        const t4 = setTimeout(() => {
+          this.send(ws, { type: 'llm.started' })
+          this.send(ws, { type: 'llm.token', token: 'Response' })
+          const t5 = setTimeout(() => {
+            this.send(ws, { type: 'llm.complete', fullText: 'This is a mock response.' })
+            const t6 = setTimeout(() => {
+              this.send(ws, { type: 'tts.complete' })
+              this.send(ws, { type: 'state.update', state: 'idle', turnId: '' })
             }, 500)
+            this.addTimer(ws, t6)
           }, 100)
+          this.addTimer(ws, t5)
         }, 100)
+        this.addTimer(ws, t4)
         break
 
       case 'interrupt':
-        this.broadcast({ type: 'state.update', state: 'idle', turnId: '' })
-        this.broadcast({ type: 'playback.completed', turnId: 'mock-turn', interrupted: true })
+        this.send(ws, { type: 'state.update', state: 'idle', turnId: '' })
+        this.send(ws, { type: 'playback.completed', turnId: 'mock-turn', interrupted: true })
         break
 
       case 'readAloud.start':
@@ -130,7 +149,7 @@ export class MockWsServer {
         break
 
       case 'ping':
-        this.broadcast({ type: 'pong' })
+        this.send(ws, { type: 'pong' })
         break
 
       default:
@@ -142,7 +161,7 @@ export class MockWsServer {
     console.log('[MockWs] Read Aloud start:', messageId, text.slice(0, 50))
     
     // Send started event
-    this.broadcast({ type: 'readAloud.started', messageId })
+    this.send(ws, { type: 'readAloud.started', messageId })
     
     try {
       // Read wav file and send as binary chunks
@@ -165,19 +184,25 @@ export class MockWsServer {
       }
       
       // Send complete event
-      this.broadcast({ type: 'readAloud.complete', messageId })
+      this.send(ws, { type: 'readAloud.complete', messageId })
       console.log('[MockWs] Read Aloud complete:', messageId)
     } catch (err) {
       console.error('[MockWs] Read Aloud error:', err)
-      this.broadcast({ type: 'runtime.error', error: 'Read Aloud failed', code: 4004 } as any)
+      this.send(ws, { type: 'runtime.error', error: 'Read Aloud failed', code: 4004 } as any)
+    }
+  }
+
+  private send(ws: WebSocket, event: MockWsEvent): void {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(event))
     }
   }
 
   broadcast(event: MockWsEvent): void {
     const message = JSON.stringify(event)
-    this.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message)
+    this.clients.forEach((_timers, ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(message)
       }
     })
   }
