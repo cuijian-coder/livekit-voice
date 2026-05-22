@@ -8,6 +8,7 @@ export interface VoiceContext {
   abortController?: AbortController;
   error?: string;
   toastMessage?: string;
+  hasAsrResult: boolean;
 }
 
 export function createInitialContext(): VoiceContext {
@@ -21,6 +22,7 @@ export function createInitialContext(): VoiceContext {
     abortController: undefined,
     error: undefined,
     toastMessage: undefined,
+    hasAsrResult: false,
   };
 }
 

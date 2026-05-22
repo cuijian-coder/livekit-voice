@@ -49,6 +49,7 @@ export const voiceMachine = setup({
       abortController: () => undefined,
       error: () => undefined,
       toastMessage: () => undefined,
+      hasAsrResult: () => false,
     }),
     startTurn: assign({
       turnId: () => createNewTurnId(),
@@ -76,9 +77,11 @@ export const voiceMachine = setup({
     },
     setPartialTranscript: assign({
       partialTranscript: ({ event }: any) => (event as any).text || '',
+      hasAsrResult: () => true,
     }),
     setFinalTranscript: assign({
       transcript: ({ event }: any) => (event as any).text || '',
+      hasAsrResult: () => true,
     }),
     showEmptyAsrToast: assign({
       toastMessage: () => '未识别文字',
@@ -146,6 +149,21 @@ export const voiceMachine = setup({
     },
     transcribing: {
       after: {
+        // If no ASR partial received within 3s, audio was likely empty (user didn't speak)
+        3000: {
+          target: 'idle',
+          guard: ({ context }: any) => !context.hasAsrResult,
+          actions: assign({
+            transcript: () => '',
+            partialTranscript: () => '',
+            streamBuffer: () => '',
+            requestId: () => createNewRequestId(),
+            turnId: () => '',
+            abortController: () => undefined,
+            error: () => undefined,
+            toastMessage: () => '未检测到语音',
+          }),
+        },
         // Real ASR can take 5-10s; give generous 15s timeout
         15000: {
           target: 'idle',
