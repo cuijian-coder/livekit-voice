@@ -31,7 +31,7 @@ async function startAudioRecording() {
 
 function stopAudioRecording() {
   audioRecorder.stop();
-  logger.info('audio.recording.stopped');
+  // Note: audioRecorder.stop() already logs 'audio.recording.stopped' internally
 }
 
 export const voiceMachine = setup({
@@ -145,6 +145,21 @@ export const voiceMachine = setup({
       },
     },
     transcribing: {
+      after: {
+        5000: {
+          target: 'idle',
+          actions: assign({
+            transcript: () => '',
+            partialTranscript: () => '',
+            streamBuffer: () => '',
+            requestId: () => createNewRequestId(),
+            turnId: () => '',
+            abortController: () => undefined,
+            error: () => undefined,
+            toastMessage: () => '识别超时，请重试',
+          }),
+        },
+      },
       on: {
         'asr.final': [
           {
