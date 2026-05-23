@@ -118,7 +118,13 @@ export class UtteranceManager {
         break
 
       case 'POSSIBLE_END':
-        this.commit()
+        // Only signal that the turn should be committed.
+        // Do NOT call binaryTransport.commit here — voice-machine handles it.
+        if (this.isActive) {
+          logger.info('utteranceManager.possibleEnd', { turnId: this.turnId })
+          this.emitEvent('turn.commit', this.turnId)
+          this.isActive = false
+        }
         break
 
       case 'IDLE':
