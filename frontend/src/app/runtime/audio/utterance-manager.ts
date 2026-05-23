@@ -3,6 +3,8 @@ import { invariant } from '../../../../../self-healing/assert'
 import { speechDetector, type SpeechState } from './speech-detector'
 import { binaryTransport } from '../transport'
 import { wsClient } from '../transport/websocket-client'
+import { audioRecorder } from './recorder'
+import { pcmPipeline } from './pcm-pipeline'
 import { createNewTurnId } from '../../voice/machine/voice-context'
 
 const logger = getLogger()
@@ -35,6 +37,10 @@ export class UtteranceManager {
 
     this.turnId = createNewTurnId()
     this.isActive = true
+
+    // Reset seq counters so each turn starts from 0
+    audioRecorder.resetWorkletSeq()
+    pcmPipeline.reset()
 
     binaryTransport.startTurn(this.turnId)
     wsClient.send({ type: 'audio.start', turnId: this.turnId } as any)
