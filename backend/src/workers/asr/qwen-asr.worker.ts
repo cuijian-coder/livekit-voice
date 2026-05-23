@@ -143,11 +143,27 @@ export class QwenAsrWorker implements AsrWorker {
 
       const audioSendPromise = (async () => {
         const wsConn = ws!
+        let batchBuffer = Buffer.alloc(0)
+        const BATCH_SIZE = 3200 // 100ms @ 16kHz 16-bit PCM
+
         for await (const chunk of audioStream) {
           if (signal.aborted || wsConn.readyState !== WebSocket.OPEN) break
-          wsConn.send(chunk, { binary: true })
-          audioBytesSent += chunk.length
-          await new Promise((r) => setTimeout(r, 50))
+
+          batchBuffer = Buffer.concat([batchBuffer, chunk])
+
+          // 当累积达到 3200 字节时发送（约 100ms 音频）
+          while (batchBuffer.length >= BATCH_SIZE) {
+            const toSend = batchBuffer.subarray(0, BATCH_SIZE)
+            wsConn.send(toSend, { binary: true })
+            audioBytesSent += BATCH_SIZE
+            batchBuffer = batchBuffer.subarray(BATCH_SIZE)
+          }
+        }
+
+        // flush 剩余音频（commit 时 stream 结束触发）
+        if (batchBuffer.length > 0 && wsConn.readyState === WebSocket.OPEN) {
+          wsConn.send(batchBuffer, { binary: true })
+          audioBytesSent += batchBuffer.length
         }
 
         if (wsConn && wsConn.readyState === WebSocket.OPEN) {

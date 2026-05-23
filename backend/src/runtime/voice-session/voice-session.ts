@@ -280,11 +280,18 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
   }
 
   private handleAudioStart(turnId: string): void {
+    // Always stop any existing ASR stream before starting a new turn.
+    // Prevents multi-turn starvation when a new audio.start arrives while
+    // the previous ASR stream is still alive (e.g., state == LISTENING).
+    if (this.asrStreamTask) {
+      this.logger.info({ sessionId: this.sessionId, state: this._state, turnId }, 'audio.start.stopping.old.asr')
+      this.stopStreamingAsr()
+    }
+
     // If state is not IDLE/LISTENING (e.g., previous turn still in TRANSCRIBING),
     // reset to IDLE first so the new turn can properly start.
     if (this._state !== CONVERSATION_STATES.IDLE && this._state !== CONVERSATION_STATES.LISTENING) {
       this.logger.info({ sessionId: this.sessionId, state: this._state }, 'audio.start.resetting.state')
-      this.stopStreamingAsr()
       this.actor.send({ type: 'RESET' })
     }
 
@@ -308,9 +315,9 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.asrStreamController = new AbortController()
     const signal = this.asrStreamController.signal
 
-    const audioStream = this.createFrameStream()
+    const audioStream = this.createFrameStream(this.asrStreamController)
 
-    this.asrStreamTask = (async () => {
+    const taskRef = this.asrStreamTask = (async () => {
       try {
         for await (const result of this.asrWorker.stream(audioStream, signal, this.logger)) {
           if (signal.aborted) break
@@ -337,22 +344,22 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
           this.logger.error({ sessionId: this.sessionId, err }, 'asr.stream.error')
         }
       }
-      this.asrStreamTask = null
+      // Only clear if no new turn has started a new stream in the meantime
+      if (this.asrStreamTask === taskRef) {
+        this.asrStreamTask = null
+      }
     })()
 
     this.logger.info({ sessionId: this.sessionId, hasExistingTask: !!this.asrStreamTask }, 'asr.stream.started')
   }
 
-  private createFrameStream(): AsyncIterable<Buffer> {
+  private createFrameStream(controller: AbortController): AsyncIterable<Buffer> {
     return {
       [Symbol.asyncIterator]: () => {
         return {
           next: async (): Promise<IteratorResult<Buffer>> => {
             while (this.asrFrameQueue.length === 0) {
-              if (this.asrStreamController?.signal.aborted) {
-                return { done: true, value: Buffer.alloc(0) }
-              }
-              if (this.asrStreamController === null) {
+              if (controller.signal.aborted) {
                 return { done: true, value: Buffer.alloc(0) }
               }
               await new Promise(resolve => setTimeout(resolve, 10))

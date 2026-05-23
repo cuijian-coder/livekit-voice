@@ -43,6 +43,7 @@ export class WebSocketClient {
 
       try {
         this.ws = new WebSocket(this.config.url)
+        this.ws.binaryType = 'arraybuffer'
 
         this.ws.onopen = () => {
           this.updateState({ state: 'connected', lastConnectedAt: Date.now() })
@@ -65,7 +66,7 @@ export class WebSocketClient {
             const data = JSON.parse(event.data)
             this.messageHandlers.forEach((handler) => handler(data))
           } catch (err) {
-            logger.error('transport.message.parse.error', { err })
+            logger.error('transport.message.parse.error', { err, dataType: typeof event.data, dataPreview: String(event.data).slice(0, 200) })
           }
         }
 

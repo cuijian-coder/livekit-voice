@@ -173,6 +173,7 @@ export const voiceMachine = setup({
         },
         'asr.final': [
           {
+            // 1. 有 final 文字 → 正常流程
             guard: ({ event }: any) => {
               const text = (event as any).text || ''
               return text.trim().length > 0
@@ -189,6 +190,23 @@ export const voiceMachine = setup({
             ],
           },
           {
+            // 2. final 为空，但 partial 有内容 → 降级使用 partial
+            guard: ({ context }: any) => !!context.partialTranscript?.trim(),
+            target: 'thinking',
+            actions: [
+              assign({
+                transcript: ({ context }: any) => context.partialTranscript,
+              }),
+              ({ context }: any) => {
+                const text = context.partialTranscript?.trim() || ''
+                if (text) {
+                  wsClient.send({ type: 'submit.text', text } as any)
+                }
+              },
+            ],
+          },
+          {
+            // 3. final 和 partial 都为空 → 才提示未识别
             target: 'idle',
             actions: ['resetSession', 'showEmptyAsrToast'],
           },

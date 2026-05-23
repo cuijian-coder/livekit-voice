@@ -10,6 +10,7 @@ export class InputBar {
   private textarea: HTMLTextAreaElement;
   private actionButton: HTMLButtonElement;
   private isProcessing = false;
+  private prevState = '';
 
   constructor() {
     this.element = createElement('div', 'input-bar');
@@ -59,29 +60,28 @@ export class InputBar {
     const isRecording = state === 'listening'
     const isTranscribing = state === 'transcribing'
 
-    console.log('[InputBar] onStateChange:', state, 'isRecording:', isRecording)
-
-    if (isRecording) {
-      console.log('[InputBar] Setting audio level callback')
+    // Only set up audio callback when transitioning INTO listening
+    if (isRecording && this.prevState !== 'listening') {
       audioRecorder.setAudioLevelCallback((level) => {
-        console.log('[InputBar] Audio level:', level)
         this.updateRecordingVisualization(level)
       })
     }
 
-    // 显示实时 ASR 部分结果或最终 transcript
-    if (isTranscribing || state === 'thinking') {
+    // Update transcript on every snapshot change (asr.partial arrives within listening state)
+    if (isRecording || isTranscribing || state === 'thinking') {
       const partialTranscript = snapshot.context.partialTranscript
       if (partialTranscript) {
         this.textarea.value = partialTranscript
       }
     }
 
-    // 显示最终 transcript (仅在 listening/idle 状态，不是 thinking)
+    // Show final transcript in listening/idle
     const finalTranscript = snapshot.context.transcript
     if (finalTranscript && (state === 'listening' || state === 'idle')) {
       this.textarea.value = finalTranscript
     }
+
+    this.prevState = state
   }
 
   private updateRecordingVisualization(level: number): void {
