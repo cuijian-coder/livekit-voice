@@ -269,7 +269,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       this.asrFrameQueue.push(pcmData)
     }
 
-    this.logger.info({ sessionId: this.sessionId, seq, size: pcmData.length, queueLength: this.asrFrameQueue.length, hasAsrStream: !!this.asrStreamTask }, 'audio.frame.received')
+    this.logger.debug({ sessionId: this.sessionId, seq, size: pcmData.length, queueLength: this.asrFrameQueue.length, hasAsrStream: !!this.asrStreamTask }, 'audio.frame.received')
   }
 
   private handleSessionInit(): void {

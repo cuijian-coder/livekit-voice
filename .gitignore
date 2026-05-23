@@ -36,4 +36,5 @@ packages/shared/**/*.js.map
 packages/shared/.turbo/
 
 # Root turbo.json (moved to self-healing/)
-turbo.json
+turbo.json*.log
+dev.log
