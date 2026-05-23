@@ -153,7 +153,13 @@ test.describe('Real ASR Pipeline - Injection Mode', () => {
 
     console.log('Injection completed')
 
-    // Wait for commit and ASR processing
+    // VAD no longer auto-commits. Manually click stop to commit the turn.
+    // Use force: true because the recording button has a pulse animation
+    // that makes Playwright's stability check time out.
+    await page.getByTestId('push-to-talk').click({ force: true })
+    console.log('Manual commit triggered')
+
+    // Wait for ASR processing
     await page.waitForTimeout(2000)
 
     // Check pipeline stats
@@ -165,7 +171,6 @@ test.describe('Real ASR Pipeline - Injection Mode', () => {
     expect(stats.injectFrames).toBeGreaterThan(0)
     expect(stats.pcmFramesProcessed).toBeGreaterThan(0)
     expect(stats.vadFramesProcessed).toBeGreaterThan(0)
-    expect(stats.lastVadState).toBe('POSSIBLE_END')
 
     // Check conversation state
     const convState = await page.evaluate(() =>
@@ -173,10 +178,12 @@ test.describe('Real ASR Pipeline - Injection Mode', () => {
     )
     console.log('Conversation state:', convState)
 
-    // Wait for transcript (mock server returns 'Test transcript' for audio.commit)
+    // Wait for transcript. Note: real-browser tests use the real backend,
+    // so ASR returns actual recognized text (e.g. '北京的天气').
     await page.waitForFunction(() => {
       const textarea = document.querySelector('[data-testid="text-input"]') as HTMLTextAreaElement
-      return textarea?.value?.includes('Test transcript')
+      const value = textarea?.value || ''
+      return value.length > 0 && value !== '发消息...'
     }, { timeout: 30000 })
 
     console.log('Test passed - transcript received')

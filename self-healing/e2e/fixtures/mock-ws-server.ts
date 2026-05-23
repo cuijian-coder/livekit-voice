@@ -104,6 +104,7 @@ export class MockWsServer {
         break
 
       case 'audio.commit':
+      case 'audio.commit.manual':
         // Simulate ASR delay then send asr.final. Do NOT auto-start LLM.
         // Client will send submit.text after receiving asr.final to trigger LLM.
         const t1 = setTimeout(() => {

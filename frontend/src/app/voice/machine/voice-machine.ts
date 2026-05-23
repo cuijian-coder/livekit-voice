@@ -3,6 +3,7 @@ import { createInitialContext, createNewRequestId, createNewTurnId } from './voi
 import type { VoiceEvent } from './voice-events';
 import { audioRecorder } from '../../runtime/audio/recorder';
 import { speechDetector } from '../../runtime/audio/speech-detector';
+import { utteranceManager } from '../../runtime/audio/utterance-manager';
 import { binaryTransport } from '../../runtime/transport';
 import { wsClient } from '../../runtime/transport/websocket-client';
 import { getLogger } from '@livekit-voice/shared/logger';
@@ -76,6 +77,7 @@ export const voiceMachine = setup({
         // UtteranceManager only starts it on VAD SPEAKING.
         logger.warn('audio.commit.noop', { reason: 'binaryTransport not started' })
       }
+      utteranceManager.resetTurnState()
     },
     setPartialTranscript: assign({
       partialTranscript: ({ event }: any) => (event as any).text || '',

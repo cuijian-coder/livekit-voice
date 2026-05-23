@@ -43,12 +43,6 @@ export class App {
     wsClient.onMessage(msg => messageRouter.route(msg));
     wsClient.onBinary(data => messageRouter.routeBinary(data));
 
-    utteranceManager.setEventHandler((event) => {
-      if (event.type === 'turn.commit') {
-        voiceActor.send({ type: 'audio.commit' } as any)
-      }
-    })
-
     utteranceManager.setOnInterruptedCallback(() => {
       voiceActor.send({ type: 'INTERRUPTING' } as any)
     })

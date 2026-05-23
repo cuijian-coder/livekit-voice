@@ -88,6 +88,11 @@ export class UtteranceManager {
     this.turnId = ''
   }
 
+  resetTurnState(): void {
+    this.isActive = false
+    this.turnId = ''
+  }
+
   reset(): void {
     this.cancel()
     speechDetector.reset()
@@ -118,12 +123,11 @@ export class UtteranceManager {
         break
 
       case 'POSSIBLE_END':
-        // Only signal that the turn should be committed.
-        // Do NOT call binaryTransport.commit here — voice-machine handles it.
+        // VAD auto-end does NOT commit the turn.
+        // User must manually click the stop button to commit.
+        // Keep isActive so the turn resumes if user starts speaking again.
         if (this.isActive) {
           logger.info('utteranceManager.possibleEnd', { turnId: this.turnId })
-          this.emitEvent('turn.commit', this.turnId)
-          this.isActive = false
         }
         break
 
