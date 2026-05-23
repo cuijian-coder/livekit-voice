@@ -9,6 +9,7 @@ export interface VoiceContext {
   error?: string;
   toastMessage?: string;
   hasAsrResult: boolean;
+  lastAsrActivityAt?: number;
 }
 
 export function createInitialContext(): VoiceContext {
@@ -23,6 +24,7 @@ export function createInitialContext(): VoiceContext {
     error: undefined,
     toastMessage: undefined,
     hasAsrResult: false,
+    lastAsrActivityAt: undefined,
   };
 }
 

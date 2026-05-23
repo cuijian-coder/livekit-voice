@@ -50,6 +50,7 @@ export const voiceMachine = setup({
       error: () => undefined,
       toastMessage: () => undefined,
       hasAsrResult: () => false,
+      lastAsrActivityAt: () => undefined,
     }),
     startTurn: assign({
       turnId: () => createNewTurnId(),
@@ -78,10 +79,12 @@ export const voiceMachine = setup({
     setPartialTranscript: assign({
       partialTranscript: ({ event }: any) => (event as any).text || '',
       hasAsrResult: () => true,
+      lastAsrActivityAt: () => Date.now(),
     }),
     setFinalTranscript: assign({
       transcript: ({ event }: any) => (event as any).text || '',
       hasAsrResult: () => true,
+      lastAsrActivityAt: () => Date.now(),
     }),
     showEmptyAsrToast: assign({
       toastMessage: () => '未识别文字',
@@ -149,8 +152,8 @@ export const voiceMachine = setup({
     },
     transcribing: {
       after: {
-        // If no ASR partial received within 3s, audio was likely empty (user didn't speak)
-        3000: {
+        // If no ASR partial received within 5s, audio was likely empty (user didn't speak)
+        5000: {
           target: 'idle',
           guard: ({ context }: any) => !context.hasAsrResult,
           actions: assign({
@@ -164,9 +167,14 @@ export const voiceMachine = setup({
             toastMessage: () => '未检测到语音',
           }),
         },
-        // Real ASR can take 5-10s; give generous 15s timeout
+        // Dynamic timeout: only trigger if no ASR activity in the last 15s.
+        // Re-entering transcribing (e.g. on asr.partial) resets this timer.
         15000: {
           target: 'idle',
+          guard: ({ context }: any) => {
+            const lastActivity = context.lastAsrActivityAt || 0
+            return Date.now() - lastActivity >= 15000
+          },
           actions: assign({
             transcript: () => '',
             partialTranscript: () => '',
@@ -180,6 +188,12 @@ export const voiceMachine = setup({
         },
       },
       on: {
+        'asr.partial': {
+          // Re-enter transcribing to reset the 15s timeout timer
+          target: 'transcribing',
+          reenter: true,
+          actions: 'setPartialTranscript',
+        },
         'asr.final': [
           {
             guard: ({ event }: any) => {
