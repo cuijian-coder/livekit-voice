@@ -98,8 +98,11 @@ export class QwenAsrWorker implements AsrWorker {
             } else if (event === 'task-finished') {
               finished = true
               logger?.debug({}, 'dashscope.asr.finished')
-              if (rejectNext) {
-                rejectNext(new Error('__TASK_FINISHED__'))
+              if (resolveNext) {
+                // Gracefully end the stream with an empty final result
+                // This ensures asr.final is always sent to the client,
+                // even when ASR produces no recognized text.
+                resolveNext({ text: '', isFinal: true })
                 resolveNext = rejectNext = eventReject = undefined as any
               }
             } else if (event === 'task-failed') {
