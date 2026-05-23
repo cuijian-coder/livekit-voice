@@ -269,7 +269,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       this.asrFrameQueue.push(pcmData)
     }
 
-    this.logger.debug({ sessionId: this.sessionId, seq, size: pcmData.length }, 'audio.frame.received')
+    this.logger.info({ sessionId: this.sessionId, seq, size: pcmData.length, queueLength: this.asrFrameQueue.length, hasAsrStream: !!this.asrStreamTask }, 'audio.frame.received')
   }
 
   private handleSessionInit(): void {
@@ -295,7 +295,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.actor.send({ type: 'START' })
     this.send({ type: SERVER_EVENTS.SESSION_STARTED })
     this.sendStateUpdate()
-    this.logger.info({ sessionId: this.sessionId, turnId }, 'audio.start')
+    this.logger.info({ sessionId: this.sessionId, turnId, state: this._state, queueLength: this.asrFrameQueue.length }, 'audio.start')
 
     this.startStreamingAsr()
   }
@@ -315,6 +315,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
         for await (const result of this.asrWorker.stream(audioStream, signal, this.logger)) {
           if (signal.aborted) break
           if (!result.isFinal) {
+            this.logger.info({ sessionId: this.sessionId, text: result.text, turnId: this.currentTurnId }, 'asr.partial.result')
             this.send({
               type: SERVER_EVENTS.ASR_PARTIAL,
               turnId: this.currentTurnId,
@@ -323,6 +324,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
             })
           } else {
             this.currentTranscript = result.text
+            this.logger.info({ sessionId: this.sessionId, text: result.text, turnId: this.currentTurnId }, 'asr.final.result')
             this.send({
               type: SERVER_EVENTS.ASR_FINAL,
               turnId: this.currentTurnId,
@@ -338,7 +340,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       this.asrStreamTask = null
     })()
 
-    this.logger.debug({ sessionId: this.sessionId }, 'asr.stream.started')
+    this.logger.info({ sessionId: this.sessionId, hasExistingTask: !!this.asrStreamTask }, 'asr.stream.started')
   }
 
   private createFrameStream(): AsyncIterable<Buffer> {
@@ -402,16 +404,23 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
 
     this.asrFrameQueue.push(Buffer.alloc(0))
 
-    if (this.asrStreamTask) {
-      await this.asrStreamTask
+    const task = this.asrStreamTask
+    if (task) {
+      this.logger.info({ sessionId: this.sessionId, turnId, queueLength: this.asrFrameQueue.length }, 'asr.commit.awaiting.stream')
+      await task
+      // Only clear if no new turn has started a new stream in the meantime
+      if (this.asrStreamTask === task) {
+        this.asrStreamTask = null
+        this.asrStreamController = null
+        this.logger.info({ sessionId: this.sessionId, turnId }, 'asr.stream.cleared')
+      } else {
+        this.logger.info({ sessionId: this.sessionId, turnId }, 'asr.stream.skipped.clear.new.turn.active')
+      }
+    } else {
+      this.logger.warn({ sessionId: this.sessionId, turnId }, 'asr.commit.no.stream.running')
     }
 
-    this.logger.info({ sessionId: this.sessionId }, 'asr.stream.finalized')
-    // Do not auto-transition to THINKING. Wait for client submit.text.
-    // Backend actor stays in TRANSCRIBING until client decides to proceed.
-
-    this.asrStreamTask = null
-    this.asrStreamController = null
+    this.logger.info({ sessionId: this.sessionId, turnId }, 'asr.stream.finalized')
   }
 
   private handleTextSubmit(text: string): void {
