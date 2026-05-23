@@ -280,10 +280,14 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
   }
 
   private handleAudioStart(turnId: string): void {
+    // If state is not IDLE/LISTENING (e.g., previous turn still in TRANSCRIBING),
+    // reset to IDLE first so the new turn can properly start.
     if (this._state !== CONVERSATION_STATES.IDLE && this._state !== CONVERSATION_STATES.LISTENING) {
-      this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'audio.start.invalid.state')
-      return
+      this.logger.info({ sessionId: this.sessionId, state: this._state }, 'audio.start.resetting.state')
+      this.stopStreamingAsr()
+      this.actor.send({ type: 'RESET' })
     }
+
     this.currentTurnId = turnId
     this.currentSeq = 0
     this.frameBuffer.clear()
@@ -373,7 +377,8 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
 
   private async handleAudioCommit(turnId: string, finalSeq: number): Promise<void> {
     assertNotNull(this.currentTurnId, 'turnId must be set before audio commit')
-    if (this._state !== CONVERSATION_STATES.LISTENING) {
+    // Allow commit from LISTENING or TRANSCRIBING (previous turn may still be in TRANSCRIBING)
+    if (this._state !== CONVERSATION_STATES.LISTENING && this._state !== CONVERSATION_STATES.TRANSCRIBING) {
       this.logger.warn({ sessionId: this.sessionId, state: this._state }, 'audio.commit.invalid.state')
       return
     }

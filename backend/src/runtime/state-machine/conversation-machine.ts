@@ -49,6 +49,7 @@ export const conversationMachine = createMachine({
     },
     [s.TRANSCRIBING]: {
       on: {
+        START: s.LISTENING,
         ASR_COMPLETE: { target: s.THINKING },
         INTERRUPT: s.INTERRUPTING,
         ERROR: s.ERROR,
@@ -57,6 +58,7 @@ export const conversationMachine = createMachine({
     },
     [s.THINKING]: {
       on: {
+        START: s.LISTENING,
         LLM_COMPLETE: s.SPEAKING,
         INTERRUPT: s.INTERRUPTING,
         ERROR: s.ERROR,
@@ -65,6 +67,7 @@ export const conversationMachine = createMachine({
     },
     [s.SPEAKING]: {
       on: {
+        START: s.LISTENING,
         SPEAK_COMPLETE: s.IDLE,
         INTERRUPT: s.INTERRUPTING,
         ERROR: s.ERROR,
