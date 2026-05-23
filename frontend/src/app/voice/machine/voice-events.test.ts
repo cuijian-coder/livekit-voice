@@ -12,6 +12,11 @@ describe('isUserEvent', () => {
     expect(isUserEvent(event)).toBe(true)
   })
 
+  it('should return true for audio.commit.manual', () => {
+    const event: VoiceEvent = { type: 'audio.commit.manual' }
+    expect(isUserEvent(event)).toBe(true)
+  })
+
   it('should return true for interrupt.request', () => {
     const event: VoiceEvent = { type: 'interrupt.request' }
     expect(isUserEvent(event)).toBe(true)
@@ -78,6 +83,7 @@ describe('isSystemEvent', () => {
     const userEvents: VoiceEvent[] = [
       { type: 'session.start' },
       { type: 'audio.commit' },
+      { type: 'audio.commit.manual' },
       { type: 'interrupt.request' },
       { type: 'SUBMIT_TEXT', text: 'test' },
     ]

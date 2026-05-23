@@ -152,7 +152,7 @@ export class InputBar {
     } else if (buttonVm.semantic === 'record') {
       voiceActor.send({ type: 'session.start' });
     } else if (buttonVm.semantic === 'stop-recording') {
-      voiceActor.send({ type: 'audio.commit' });
+      voiceActor.send({ type: 'audio.commit.manual' });
     } else if (buttonVm.semantic === 'interrupt' || buttonVm.semantic === 'loading') {
       voiceActor.send({ type: 'interrupt.request' });
     }

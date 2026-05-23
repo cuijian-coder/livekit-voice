@@ -51,6 +51,7 @@ export const voiceMachine = setup({
       toastMessage: () => undefined,
       hasAsrResult: () => false,
       lastAsrActivityAt: () => undefined,
+      manualCommit: () => false,
     }),
     startTurn: assign({
       turnId: () => createNewTurnId(),
@@ -129,6 +130,14 @@ export const voiceMachine = setup({
           target: 'transcribing',
           actions: ['setAbortController', 'commitAudio'],
         },
+        'audio.commit.manual': {
+          target: 'transcribing',
+          actions: [
+            'setAbortController',
+            'commitAudio',
+            assign({ manualCommit: () => true }),
+          ],
+        },
         SUBMIT_TEXT: {
           target: 'thinking',
           actions: [
@@ -151,42 +160,8 @@ export const voiceMachine = setup({
       },
     },
     transcribing: {
-      after: {
-        // If no ASR partial received within 5s, audio was likely empty (user didn't speak)
-        5000: {
-          target: 'idle',
-          guard: ({ context }: any) => !context.hasAsrResult,
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            turnId: () => '',
-            abortController: () => undefined,
-            error: () => undefined,
-            toastMessage: () => '未检测到语音',
-          }),
-        },
-        // Dynamic timeout: only trigger if no ASR activity in the last 15s.
-        // Re-entering transcribing (e.g. on asr.partial) resets this timer.
-        15000: {
-          target: 'idle',
-          guard: ({ context }: any) => {
-            const lastActivity = context.lastAsrActivityAt || 0
-            return Date.now() - lastActivity >= 15000
-          },
-          actions: assign({
-            transcript: () => '',
-            partialTranscript: () => '',
-            streamBuffer: () => '',
-            requestId: () => createNewRequestId(),
-            turnId: () => '',
-            abortController: () => undefined,
-            error: () => undefined,
-            toastMessage: () => '识别超时，请重试',
-          }),
-        },
-      },
+      entry: assign({ manualCommit: ({ context }: any) => context.manualCommit ?? false }),
+      exit: assign({ manualCommit: () => false }),
       on: {
         'asr.partial': {
           // Re-enter transcribing to reset the 15s timeout timer

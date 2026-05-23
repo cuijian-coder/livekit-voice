@@ -1,6 +1,7 @@
 export type UserEvent =
   | { type: 'session.start' }
   | { type: 'audio.commit' }
+  | { type: 'audio.commit.manual' }
   | { type: 'interrupt.request' }
   | { type: 'SUBMIT_TEXT'; text: string };
 
@@ -19,7 +20,7 @@ export type VoiceEvent = UserEvent | SystemEvent;
 
 export function isUserEvent(event: VoiceEvent): event is UserEvent {
   const type = (event as { type: string }).type;
-  return type === 'session.start' || type === 'audio.commit' || type === 'interrupt.request' || type === 'SUBMIT_TEXT';
+  return type === 'session.start' || type === 'audio.commit' || type === 'audio.commit.manual' || type === 'interrupt.request' || type === 'SUBMIT_TEXT';
 }
 
 export function isSystemEvent(event: VoiceEvent): event is SystemEvent {
