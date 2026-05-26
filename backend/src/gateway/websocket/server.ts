@@ -25,18 +25,24 @@ export class GatewayServer {
         this.logger.debug({ sessionId: session.sessionId, isBinary, size: typeof data === 'string' ? data.length : data.length }, 'ws.message.received')
         const buf = typeof data === 'string' ? Buffer.from(data) : data
         if (isBinary) {
-          // Format: [seq: uint32 (4 bytes, little-endian)][PCM: Int16[]]
-          if (buf.length < 5) {
+          // Format: [seq: uint32 LE][turnIdLen: uint8][turnId: UTF-8][PCM: Int16[]]
+          if (buf.length < 6) {
             this.logger.warn({ sessionId: session.sessionId, size: buf.length }, 'binary.frame.too.small')
             return
           }
           const seq = buf.readUInt32LE(0)
-          const pcmData = buf.slice(4)
+          const turnIdLen = buf.readUInt8(4)
+          if (buf.length < 5 + turnIdLen + 1) {
+            this.logger.warn({ sessionId: session.sessionId, size: buf.length, turnIdLen }, 'binary.frame.invalid.turnId')
+            return
+          }
+          const turnId = buf.toString('utf-8', 5, 5 + turnIdLen)
+          const pcmData = buf.slice(5 + turnIdLen)
           if (!isValidBinaryFrame(pcmData)) {
             this.logger.warn({ sessionId: session.sessionId, size: pcmData.length }, 'binary.frame.too.large')
             return
           }
-          session.handleBinaryFrame(pcmData, seq)
+          session.handleBinaryFrame(pcmData, seq, turnId)
         } else {
           const msg = parseMessage(buf)
           this.logger.debug({ sessionId: session.sessionId, type: msg.type }, 'ws.message.parsed')

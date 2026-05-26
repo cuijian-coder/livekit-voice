@@ -60,14 +60,15 @@ describe('BinaryTransport', () => {
     expect(commitCall![0].finalSeq).toBe(10)
   })
 
-  it('should ignore commit when no frames sent', () => {
+  it('should still send commit when no frames sent (allows empty commit)', () => {
     transport.startTurn('turn-1')
     transport.commit()
 
     const commitCall = vi.mocked(wsClient.send).mock.calls.find(
       (call: any) => call[0].type === 'audio.commit'
     )
-    expect(commitCall).toBeUndefined()
+    expect(commitCall).toBeDefined()
+    expect(commitCall![0].finalSeq).toBe(-1)
   })
 
   it('should allow multiple turns with proper seq isolation', () => {

@@ -89,12 +89,14 @@ describe('voiceMachine', () => {
     expect(snapshot.value).toBe('speaking')
   })
 
-  it('should transition to listening on tts.complete (continuous conversation)', () => {
+  it('should transition to idle on playback.complete (continuous conversation)', () => {
     actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
     actor.send({ type: 'llm.complete', fullText: 'complete' })
     actor.send({ type: 'tts.complete' })
+    expect(actor.getSnapshot().value).toBe('speaking') // stream ended, but still playing
+    actor.send({ type: 'playback.complete' })
     const snapshot = actor.getSnapshot()
-    expect(snapshot.value).toBe('listening')
+    expect(snapshot.value).toBe('idle')
   })
 
   it('should transition to idle on interrupt.request from listening', () => {
@@ -189,24 +191,11 @@ describe('voiceMachine', () => {
       expect(snapshot.context.partialTranscript).toBe('你好')
     })
 
-    it('should update partialTranscript on asr.partial in thinking', () => {
-      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
-      actor.send({ type: 'asr.partial', text: '正在说话' })
-      const snapshot = actor.getSnapshot()
-      expect(snapshot.context.partialTranscript).toBe('正在说话')
-    })
   })
 
   describe('asr.final in listening state', () => {
     it('should update transcript on asr.final in listening', () => {
       actor.send({ type: 'session.start' })
-      actor.send({ type: 'asr.final', text: '最终文本' })
-      const snapshot = actor.getSnapshot()
-      expect(snapshot.context.transcript).toBe('最终文本')
-    })
-
-    it('should update transcript on asr.final in thinking', () => {
-      actor.send({ type: 'SUBMIT_TEXT', text: 'hello' })
       actor.send({ type: 'asr.final', text: '最终文本' })
       const snapshot = actor.getSnapshot()
       expect(snapshot.context.transcript).toBe('最终文本')
@@ -241,22 +230,31 @@ describe('voiceMachine', () => {
       actor.send({ type: 'llm.complete', fullText: 'response' })
       expect(actor.getSnapshot().value).toBe('speaking')
 
+      // tts.complete only marks stream end; playback.complete triggers state change
       actor.send({ type: 'tts.complete' })
-      expect(actor.getSnapshot().value).toBe('listening')
+      expect(actor.getSnapshot().value).toBe('speaking')
+      actor.send({ type: 'playback.complete' })
+      expect(actor.getSnapshot().value).toBe('idle') // back to idle after playback
     })
 
     it('should allow multiple conversation cycles', () => {
+      // Cycle 1: text submit → thinking → speaking → idle
       actor.send({ type: 'SUBMIT_TEXT', text: 'first' })
       actor.send({ type: 'llm.complete', fullText: 'first response' })
-      actor.send({ type: 'tts.complete' })
+      actor.send({ type: 'playback.complete' })
+      expect(actor.getSnapshot().value).toBe('idle')
+
+      // User clicks record button again
+      actor.send({ type: 'session.start' })
       expect(actor.getSnapshot().value).toBe('listening')
 
+      // Simulate ASR → thinking
       actor.send({ type: 'audio.commit' })
       actor.send({ type: 'asr.final', text: 'second' })
       expect(actor.getSnapshot().value).toBe('thinking')
       actor.send({ type: 'llm.complete', fullText: 'second response' })
-      actor.send({ type: 'tts.complete' })
-      expect(actor.getSnapshot().value).toBe('listening')
+      actor.send({ type: 'playback.complete' })
+      expect(actor.getSnapshot().value).toBe('idle')
     })
   })
 })

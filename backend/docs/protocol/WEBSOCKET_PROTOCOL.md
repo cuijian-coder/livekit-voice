@@ -2,7 +2,7 @@
 
 ## 概述
 
-前后端通过 WebSocket 进行双向通信，支持二进制音频流和 JSON 消息。采用**连续对话**协议，音频帧实时发送，turn 通过 silence timeout 自动结束。
+前后端通过 WebSocket 进行双向通信，支持二进制音频流和 JSON 消息。采用**连续对话**协议，音频帧实时发送，turn 通过用户手动点击停止按钮结束（VAD 检测到 POSSIBLE_END 仅记录日志，不自动触发 commit）。
 
 ## 连接建立
 
@@ -74,7 +74,8 @@ type ClientMessage =
 
   // 音频
   | { type: 'audio.start'; turnId: string }           // Turn 开始
-  | { type: 'audio.commit'; turnId: string; finalSeq: number }  // Turn 结束
+  | { type: 'audio.commit'; turnId: string; finalSeq: number }  // Turn 结束（VAD 自动）
+  | { type: 'audio.commit.manual'; turnId: string; finalSeq: number }  // Turn 结束（用户手动）
   | { type: 'turn.cancel'; turnId: string }           // 打断取消
 
   // Binary audio frame: [seq: uint32 LE][PCM: int16[]]
@@ -96,31 +97,31 @@ Client                         Server                       AI Pipeline
   │── audio.start ──────────────▶│                              │
   │      { turnId }              │                              │
   │                              │                              │
-  │── [seq=0][PCM] ──────────────▶│                              │ ASR worker
-  │── [seq=1][PCM] ──────────────▶│── asr.partial ──────────────▶│ 接收帧
-  │── [seq=2][PCM] ──────────────▶│── asr.partial (seq=2, text) ◀──│
-  │◀── asr.partial ──────────────│                              │
-  │      { turnId, seq, text }   │                              │
-  │         ...                  │                              │
-  │                              │                              │
-  │  (600ms silence → auto commit)                              │
-  │                              │                              │
-  │── audio.commit ─────────────▶│                              │
-  │      { turnId, finalSeq }    │── asr.final ────────────────▶│
-  │                              │◀── asr.final ────────────────│
-  │                              │                              │
-  │                              │── llm.started ──────────────▶│
-  │◀── llm.started ─────────────│                              │
-  │                              │── llm.token ────────────────▶│
-  │◀── llm.token ◀───────────────│                              │
-  │                              │                              │
-  │                              │── tts.started ──────────────▶│
-  │◀── tts.started ─────────────│                              │
-  │                              │── [binary TTS] ─────────────▶│
-  │◀── [binary audio] ◀──────────│                              │
-  │◀── tts.complete ────────────│── tts.complete ──────────────▶│
-  │                              │                              │
-  │◀── state.update(listening) ──│  (回到 listening，继续录音)  │
+   │── [seq=0][PCM] ──────────────▶│                              │ ASR worker
+   │── [seq=1][PCM] ──────────────▶│── asr.partial ──────────────▶│ 接收帧
+   │── [seq=2][PCM] ──────────────▶│── asr.partial (seq=2, text) ◀──│
+   │◀── asr.partial ──────────────│                              │
+   │      { turnId, seq, text }   │                              │
+   │         ...                  │                              │
+   │                              │                              │
+   │  (用户点击停止按钮 → manual commit)                         │
+   │                              │                              │
+   │── audio.commit.manual ──────▶│                              │
+   │      { turnId, finalSeq }    │── asr.final ────────────────▶│
+   │                              │◀── asr.final ────────────────│
+   │                              │                              │
+   │                              │── llm.started ──────────────▶│
+   │◀── llm.started ─────────────│                              │
+   │                              │── llm.token ────────────────▶│
+   │◀── llm.token ◀───────────────│                              │
+   │                              │                              │
+   │                              │── tts.started ──────────────▶│
+   │◀── tts.started ─────────────│                              │
+   │                              │── [binary TTS] ─────────────▶│
+   │◀── [binary audio] ◀──────────│                              │
+   │◀── tts.complete ────────────│── tts.complete ──────────────▶│
+   │                              │                              │
+   │◀── state.update(listening) ──│  (回到 listening，继续录音)  │
 ```
 
 ### 打断/插话流程
@@ -208,19 +209,23 @@ Offset 4+:    PCM (int16[], little-endian)
 
 ## Streaming ASR 说明
 
-后端接收每个 binary frame 后立即加入队列，由独立任务流式发送给 ASR 服务：
+后端接收每个 binary frame 后立即加入队列，由独立任务流式消费并**batch 发送**给 ASR 服务：
 
 ```
-handleBinaryFrame(pcmData, seq)
+handleBinaryFrame(pcmData, seq, turnId)
     │
     ▼
-asrFrameQueue.push(pcmData)  // 加入队列
+asrFrameTable.get(turnId).push(pcmData)  // 按 turnId 入队
     │
     ▼
 StreamingAsrTask (异步)
     │
     ▼
-for await (result of asrWorker.stream(frameStream)):
+for await (chunk of frameStream):
+    batchBuffer = Buffer.concat([batchBuffer, chunk])
+    if (batchBuffer.length >= 3200) {  // 100ms audio
+        ws.send(batchBuffer.subarray(0, 3200))  // send to DashScope
+    }
     │
     ▼
 asr.partial { turnId, seq, text }  // 实时返回
@@ -231,11 +236,13 @@ asr.partial { turnId, seq, text }  // 实时返回
 ```
 audio.start (turnId)           Turn 开始
     │
-    ├─ frames 实时发送
+    ├─ frames 实时发送 (100ms batch)
     │
     ▼
-audio.commit (turnId, finalSeq)  Turn 结束（自动或手动）
+audio.commit.manual (turnId, finalSeq)  Turn 结束（用户手动点击）
     │
+    ├─ flush 剩余音频 (batchBuffer)
+    ├─ finish-task → DashScope
     ├─ asr.final 返回
     ├─ llm 推理
     └─ tts 生成

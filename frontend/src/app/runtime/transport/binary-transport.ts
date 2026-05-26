@@ -29,16 +29,20 @@ export class BinaryTransport {
 
     this.lastSeq = frame.seq
 
-    // Build binary frame: [seq: uint32 LE][PCM: Int16[]]
+    // Build binary frame: [seq: uint32 LE][turnIdLen: uint8][turnId: UTF-8][PCM: Int16[]]
     const seqBuffer = new ArrayBuffer(4)
     const seqView = new DataView(seqBuffer)
     seqView.setUint32(0, frame.seq, true)  // little-endian
-
     const seqArray = new Uint8Array(seqBuffer)
-    const frameData = this.concatArrays(seqArray, frame.pcm)
+
+    const turnIdBytes = new TextEncoder().encode(this.currentTurnId)
+    invariant(turnIdBytes.length <= 255, 'turnId must be <= 255 bytes')
+    const turnIdLenArray = new Uint8Array([turnIdBytes.length])
+
+    const frameData = this.concatArrays(this.concatArrays(seqArray, turnIdLenArray), turnIdBytes, frame.pcm)
 
     wsClient.sendBinary(frameData)
-    logger.debug('binaryTransport.sent', { seq: frame.seq, pcmSize: frame.pcm.length })
+    logger.debug('binaryTransport.sent', { seq: frame.seq, pcmSize: frame.pcm.length, turnId: this.currentTurnId })
   }
 
   async flush(): Promise<void> {
@@ -61,16 +65,8 @@ export class BinaryTransport {
   }
 
   async commit(): Promise<void> {
-    if (!this.isActive) {
-      logger.warn('binaryTransport.commit.ignored.notActive')
-      return
-    }
     if (!this.currentTurnId) {
       logger.warn('binaryTransport.commit.ignored.noTurnId')
-      return
-    }
-    if (this.lastSeq < 0) {
-      logger.warn('binaryTransport.commit.ignored.noFrames')
       return
     }
 
@@ -94,10 +90,14 @@ export class BinaryTransport {
     }
   }
 
-  private concatArrays(a: Uint8Array, b: Uint8Array): Uint8Array {
-    const result = new Uint8Array(a.length + b.length)
-    result.set(a, 0)
-    result.set(b, a.length)
+  private concatArrays(...arrays: Uint8Array[]): Uint8Array {
+    const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0)
+    const result = new Uint8Array(totalLength)
+    let offset = 0
+    for (const arr of arrays) {
+      result.set(arr, offset)
+      offset += arr.length
+    }
     return result
   }
 

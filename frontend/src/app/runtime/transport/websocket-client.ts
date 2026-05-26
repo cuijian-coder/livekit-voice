@@ -114,7 +114,7 @@ export class WebSocketClient {
     invariant(data != null && data.length > 0, 'binary data must be non-empty')
 
     try {
-      this.ws.send(data)
+      this.ws.send(data as any)
       logger.debug('transport.sent.binary', { size: data.length })
     } catch (err) {
       logger.error('transport.sendBinary.error', { err })

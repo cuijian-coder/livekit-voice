@@ -49,7 +49,7 @@ export class VoiceSession {
     }
     return new QwenLlmWorker()
   })()
-  private asrFrameQueue: Buffer[] = []
+  private asrFrameTable: Map<string, Buffer[]> = new Map()
   private asrStreamController: AbortController | null = null
   private asrStreamTask: Promise<void> | null = null
   private ttsWorker = (() => {
@@ -261,15 +261,15 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     }
   }
 
-  handleBinaryFrame(pcmData: Buffer, seq: number): void {
+  handleBinaryFrame(pcmData: Buffer, seq: number, turnId: string): void {
     this.frameBuffer.set(seq, pcmData)
     this.currentSeq = seq
 
-    if (this.asrFrameQueue !== undefined) {
-      this.asrFrameQueue.push(pcmData)
-    }
+    const queue = this.asrFrameTable.get(turnId) || []
+    queue.push(pcmData)
+    this.asrFrameTable.set(turnId, queue)
 
-    this.logger.debug({ sessionId: this.sessionId, seq, size: pcmData.length, queueLength: this.asrFrameQueue.length, hasAsrStream: !!this.asrStreamTask }, 'audio.frame.received')
+    this.logger.debug({ sessionId: this.sessionId, seq, turnId, size: pcmData.length, queueLength: queue.length, hasAsrStream: !!this.asrStreamTask }, 'audio.frame.received')
   }
 
   private handleSessionInit(): void {
@@ -298,11 +298,20 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.currentTurnId = turnId
     this.currentSeq = 0
     this.frameBuffer.clear()
-    this.asrFrameQueue = []
+    // Safe cleanup: delete all old turn frames, keep current turn's early frames
+    // (frames may arrive BEFORE audio.start due to WebSocket ordering).
+    const deletedTurns: string[] = []
+    this.asrFrameTable.forEach((_, key) => {
+      if (key !== turnId) {
+        this.asrFrameTable.delete(key)
+        deletedTurns.push(key)
+      }
+    })
+    const currentQueue = this.asrFrameTable.get(turnId) || []
     this.actor.send({ type: 'START' })
     this.send({ type: SERVER_EVENTS.SESSION_STARTED })
     this.sendStateUpdate()
-    this.logger.info({ sessionId: this.sessionId, turnId, state: this._state, queueLength: this.asrFrameQueue.length }, 'audio.start')
+    this.logger.info({ sessionId: this.sessionId, turnId, state: this._state, queueLength: currentQueue.length, deletedTurns: deletedTurns.length }, 'audio.start')
 
     this.startStreamingAsr()
   }
@@ -315,7 +324,7 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.asrStreamController = new AbortController()
     const signal = this.asrStreamController.signal
 
-    const audioStream = this.createFrameStream(this.asrStreamController)
+    const audioStream = this.createFrameStream(this.asrStreamController, this.currentTurnId)
 
     const taskRef = this.asrStreamTask = (async () => {
       try {
@@ -331,11 +340,12 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
             })
           } else {
             this.currentTranscript = result.text
-            this.logger.info({ sessionId: this.sessionId, text: result.text, turnId: this.currentTurnId }, 'asr.final.result')
+            this.logger.info({ sessionId: this.sessionId, text: result.text, sentenceId: result.sentenceId, turnId: this.currentTurnId }, 'asr.final.result')
             this.send({
               type: SERVER_EVENTS.ASR_FINAL,
               turnId: this.currentTurnId,
-              text: result.text
+              text: result.text,
+              sentenceId: result.sentenceId,
             })
           }
         }
@@ -353,22 +363,25 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.logger.info({ sessionId: this.sessionId, hasExistingTask: !!this.asrStreamTask }, 'asr.stream.started')
   }
 
-  private createFrameStream(controller: AbortController): AsyncIterable<Buffer> {
+  private createFrameStream(controller: AbortController, turnId: string): AsyncIterable<Buffer> {
     return {
       [Symbol.asyncIterator]: () => {
         return {
           next: async (): Promise<IteratorResult<Buffer>> => {
-            while (this.asrFrameQueue.length === 0) {
+            while (true) {
               if (controller.signal.aborted) {
                 return { done: true, value: Buffer.alloc(0) }
               }
+              const queue = this.asrFrameTable.get(turnId)
+              if (queue && queue.length > 0) {
+                const frame = queue.shift()!
+                if (frame.length === 0 && queue.length === 0) {
+                  return { done: true, value: Buffer.alloc(0) }
+                }
+                return { done: false, value: frame }
+              }
               await new Promise(resolve => setTimeout(resolve, 10))
             }
-            const frame = this.asrFrameQueue.shift()!
-            if (frame.length === 0 && this.asrFrameQueue.length === 0) {
-              return { done: true, value: Buffer.alloc(0) }
-            }
-            return { done: false, value: frame }
           }
         }
       }
@@ -380,7 +393,9 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
       this.asrStreamController.abort()
       this.asrStreamController = null
     }
-    this.asrFrameQueue = []
+    // Do NOT clear asrFrameTable here. Each turn's frames are isolated in the
+    // Map by turnId. Old turn frames are cleaned up in handleAudioStart. The
+    // new turn's ASR stream only consumes frames matching its turnId.
     this.asrStreamTask = null
   }
 
@@ -409,11 +424,13 @@ this.logger.info({ sessionId: this.sessionId, transcript: this.currentTranscript
     this.actor.send({ type: 'VAD_END' })
     this.eventBus.emit('vad.ended')
 
-    this.asrFrameQueue.push(Buffer.alloc(0))
+    const queue = this.asrFrameTable.get(turnId) || []
+    queue.push(Buffer.alloc(0))
+    this.asrFrameTable.set(turnId, queue)
 
     const task = this.asrStreamTask
     if (task) {
-      this.logger.info({ sessionId: this.sessionId, turnId, queueLength: this.asrFrameQueue.length }, 'asr.commit.awaiting.stream')
+      this.logger.info({ sessionId: this.sessionId, turnId, queueLength: queue.length }, 'asr.commit.awaiting.stream')
       await task
       // Only clear if no new turn has started a new stream in the meantime
       if (this.asrStreamTask === task) {
