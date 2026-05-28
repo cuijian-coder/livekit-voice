@@ -165,7 +165,7 @@ importers:
         specifier: ^9.0.0
         version: 9.2.1
       electron:
-        specifier: ^33.0.0
+        specifier: 33.4.11
         version: 33.4.11
       electron-builder:
         specifier: ^25.0.0

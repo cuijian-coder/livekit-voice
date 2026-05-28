@@ -4,7 +4,7 @@
   "description": "Realtime AI Voice Runtime",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "pnpm tsx watch src/main.ts",
     "start": "node --import tsx src/main.ts",
     "build": "tsc",
     "test": "vitest",
