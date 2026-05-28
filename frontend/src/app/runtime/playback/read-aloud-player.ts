@@ -9,6 +9,8 @@ export class ReadAloudPlayer {
   private currentMessageId: string | null = null
   private onCompleteCallback: ((messageId: string) => void) | null = null
   private currentSource: AudioBufferSourceNode | null = null
+  private ttsSampleRate = 16000
+  private hasReceivedWavHeader = false
 
   init(messageId: string): void {
     if (this.audioContext) {
@@ -18,6 +20,8 @@ export class ReadAloudPlayer {
     this.currentMessageId = messageId
     this.audioQueue = []
     this.isPlaying = false
+    this.ttsSampleRate = 16000
+    this.hasReceivedWavHeader = false
     logger.info('readAloud.player.init', { messageId })
   }
 
@@ -113,17 +117,60 @@ export class ReadAloudPlayer {
   }
 
   private decodePcm(pcmData: Uint8Array): AudioBuffer {
-    const sampleCount = Math.floor(pcmData.length / 2)
-    const float32Data = new Float32Array(sampleCount)
+    let offset = 0
+    let sampleRate = this.ttsSampleRate
 
-    for (let i = 0; i < sampleCount; i++) {
-      const low = pcmData[i * 2]
-      const high = pcmData[i * 2 + 1]
-      const int16 = (high << 8) | low
-      float32Data[i] = int16 / 32768
+    // NLS streaming TTS: only the FIRST chunk contains WAV header.
+    // Subsequent chunks are raw PCM. Do NOT scan for header on every chunk.
+    if (!this.hasReceivedWavHeader && pcmData.length >= 44) {
+      const riff = String.fromCharCode(pcmData[0], pcmData[1], pcmData[2], pcmData[3])
+      const wave = String.fromCharCode(pcmData[8], pcmData[9], pcmData[10], pcmData[11])
+      if (riff === 'RIFF' && wave === 'WAVE') {
+        this.hasReceivedWavHeader = true
+        sampleRate = pcmData[24] | (pcmData[25] << 8) | (pcmData[26] << 16) | (pcmData[27] << 24)
+        this.ttsSampleRate = sampleRate
+
+        offset = 36
+        while (offset + 8 <= pcmData.length) {
+          const chunkId = String.fromCharCode(pcmData[offset], pcmData[offset + 1], pcmData[offset + 2], pcmData[offset + 3])
+          const chunkSize = pcmData[offset + 4] | (pcmData[offset + 5] << 8) | (pcmData[offset + 6] << 16) | (pcmData[offset + 7] << 24)
+          if (chunkId === 'data') {
+            offset += 8
+            break
+          }
+          offset += 8 + chunkSize
+          if (offset > pcmData.length) {
+            offset = 44
+            break
+          }
+        }
+
+        logger.debug('readAloud.firstChunk', {
+          length: pcmData.length,
+          offset,
+          sampleRate,
+        })
+      }
     }
 
-    const audioBuffer = this.audioContext!.createBuffer(1, sampleCount, 16000)
+    const pcmLength = pcmData.length - offset
+    const effectiveLength = pcmLength - (pcmLength % 2)
+    const sampleCount = Math.floor(effectiveLength / 2)
+
+    if (sampleCount === 0) {
+      logger.warn('readAloud.emptyChunk', { length: pcmData.length, offset })
+      const emptyBuffer = this.audioContext!.createBuffer(1, 1, sampleRate)
+      return emptyBuffer
+    }
+
+    // Use DataView for robust little-endian int16 parsing
+    const view = new DataView(pcmData.buffer, pcmData.byteOffset + offset, effectiveLength)
+    const float32Data = new Float32Array(sampleCount)
+    for (let i = 0; i < sampleCount; i++) {
+      float32Data[i] = view.getInt16(i * 2, true) / 32768
+    }
+
+    const audioBuffer = this.audioContext!.createBuffer(1, sampleCount, sampleRate)
     audioBuffer.copyToChannel(float32Data, 0)
     return audioBuffer
   }

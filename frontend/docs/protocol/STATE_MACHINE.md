@@ -7,7 +7,7 @@
 ## 核心设计原则
 
 1. **Always-on Recording**: 麦克风持续采集，VAD 不阻塞音频发送
-2. **Silence Auto-commit**: 600ms 静音自动触发 audio.commit
+2. **Manual Commit**: VAD 检测到 POSSIBLE_END 仅记录日志，不自动触发 audio.commit；只有用户手动点击停止按钮才提交录音
 3. **Continuous Conversation**: TTS 结束后回到 listening，不中断录音
 4. **Full Duplex**: 支持用户和助手同时说话（打断/插话）
 
@@ -21,37 +21,40 @@ type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'interrupted'
 |------|------|--------|-----|
 | idle | 空闲状态 | 关闭 | 关闭 |
 | listening | 持续录音中 | 开启 | 关闭 |
-| thinking | 等待助手响应 | 开启 | 关闭 |
-| speaking | 助手正在说话 | 开启 | 播放中 |
+| transcribing | ASR 识别中（等待最终/部分结果） | 关闭 | 关闭 |
+| thinking | 等待助手响应（LLM 推理中） | 关闭 | 关闭 |
+| speaking | 助手正在说话 | 关闭 | 播放中 |
 | interrupted | 被用户打断 | 开启 | 停止 |
 | error | 错误状态 | 关闭 | 关闭 |
 
 ## 状态图
 
 ```
-                           用户说话或 asr.final
-                          ─────────────────────────▶
+                            用户说话或 asr.final (有文字)
+                           ─────────────────────────▶
 ┌──────────┐                                    ┌─────────────┐
 │   idle   │◀───────────────────────────────────│   thinking  │
 └────┬─────┘                                     └──────┬──────┘
      │ session.start                                   │
      │                                                │ llm.complete
      ▼                                                ▼
-┌─────────────┐    600ms 静音     ┌─────────────┐    ┌─────────────┐
-│ listening   │ ────────────────▶│  thinking   │───▶│  speaking   │
-│ (麦克风开启) │    audio.commit   │ (等待响应)   │    │ (TTS 播放)  │
-└──────┬──────┘                   └─────────────┘    └──────┬──────┘
-       │                                                        │
-       │                            tts.complete                │ 用户插话
-       │◀───────────────────────────────────────────────────────┤ INTERRUPTING
-       │                            回到 listening              │
-       │                                                        ▼
-       │                                              ┌─────────────────┐
-       │                                              │   interrupted    │
-       │                                              │  (resetSession)  │
-       │                                              └────────┬────────┘
-       │                                                       │
-       │◀──────────────────────────────────────────────────────┘
+┌─────────────┐    手动停止      ┌─────────────┐    ┌─────────────┐
+│ listening   │ ───────────────▶│ transcribing│───▶│  speaking   │
+│ (麦克风开启) │  audio.commit    │ (ASR 处理)   │    │ (TTS 播放)  │
+│  asr.partial │                 └─────────────┘    └──────┬──────┘
+└──────┬──────┘                   ↑                      │
+       │                          │ asr.partial (重置超时)│
+       │                          │ asr.final 为空      │
+       │                          │ + partial 有内容    │ 用户插话
+       │◀── tts.complete ─────────┘ + partial 为空      │ INTERRUPTING
+       │                            → idle (toast)     │
+       │                                                 ▼
+       │                                       ┌─────────────────┐
+       │                                       │   interrupted    │
+       │                                       │  (resetSession)  │
+       │                                       └────────┬────────┘
+       │                                                │
+       │◀───────────────────────────────────────────────┘
        │                            回到 idle
 ```
 
@@ -73,14 +76,18 @@ speaking → (用户说话) → listening (麦克风不中断，TTS 停止)
 
 ```typescript
 interface VoiceContext {
-  transcript: string;          // 完整转写文本
-  partialTranscript: string;   // 当前转写片段
+  transcript: string;          // 完整转写文本 (asr.final)
+  partialTranscript: string;   // 当前转写片段 (asr.partial)
   streamBuffer: string;        // TTS 流式响应缓冲
   sessionId: string;           // 会话 ID
   turnId: string;              // 当前 turn ID
-  requestId: string;           // 请求 ID
+  requestId: string;          // 请求 ID
   abortController?: AbortController;
   error?: string;
+  toastMessage?: string;      // 空 ASR 提示消息
+  hasAsrResult: boolean;      // 是否收到过 asr.partial
+  lastAsrActivityAt?: number; // 最后一次 ASR 活动时间戳
+  manualCommit: boolean;      // 是否由用户手动触发 commit
 }
 ```
 
@@ -124,8 +131,8 @@ interface VoiceContext {
 │                    UtteranceManager                         │
 │                                                             │
 │  Responsibilities:                                          │
-│  - audio.start on speech start                              │
-│  - audio.commit on silence timeout (600ms)                  │
+│  - audio.start on speech start (VAD SPEAKING)                 │
+│  - audio.commit on manual button click (NOT auto)            │
 │  - turn.cancel on interruption                              │
 │  - seq reset per turn                                       │
 │  - Integrates with SpeechDetector                           │
@@ -137,7 +144,7 @@ interface VoiceContext {
 │                                                             │
 │  States: IDLE | SPEAKING | POSSIBLE_END | INTERRUPTING      │
 │  - Energy detection (RMS)                                   │
-│  - Silence timeout (600ms) → auto commit                    │
+│  - Silence timeout (1500ms) → logs only, does NOT commit    │
 │  - Interruption detection (user speaking while assistant)   │
 └─────────────────────────────────────────────────────────────┘
                               ↑
@@ -201,17 +208,23 @@ speechDetector.setAssistantSpeaking(false)
 
 ### 转换验证
 
-| 转换 | 有效？ |
-|------|--------|
-| idle → listening | ✅ |
-| listening → thinking | ✅ |
-| listening → listening (asr.partial) | ✅ |
-| thinking → speaking | ✅ |
-| thinking → listening (asr.final) | ✅ |
-| speaking → listening (tts.complete) | ✅ |
-| speaking → listening (INTERRUPTING) | ✅ |
-| any → idle (interrupt.request) | ✅ |
-| any → error (runtime.error) | ✅ |
+| 转换 | 有效？ | 说明 |
+|------|--------|------|
+| idle → listening | ✅ | session.start |
+| idle → thinking | ✅ | SUBMIT_TEXT |
+| listening → transcribing | ✅ | audio.commit / audio.commit.manual |
+| listening → thinking | ✅ | SUBMIT_TEXT |
+| listening → listening (asr.partial) | ✅ | 实时更新 partialTranscript |
+| listening → idle (interrupt.request) | ✅ | 取消录音 |
+| transcribing → transcribing (asr.partial) | ✅ | 重置 15s 超时 |
+| transcribing → thinking | ✅ | asr.final 有文字 → 发 submit.text |
+| transcribing → idle | ✅ | asr.final 为空 + partial 为空 → toast |
+| thinking → speaking | ✅ | llm.complete |
+| thinking → idle (asr.final 空) | ✅ | 降级：final 为空但 partial 有 → 用 partial 发 submit.text |
+| speaking → listening | ✅ | tts.complete |
+| speaking → idle (INTERRUPTING) | ✅ | 用户打断 |
+| any → idle (interrupt.request) | ✅ | |
+| any → error (runtime.error) | ✅ | |
 
 ## 调试建议
 

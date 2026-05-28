@@ -38,17 +38,19 @@ InputBar
 |------|----------|----------|
 | `idle` (无输入) | 麦克风图标 | 发送 `session.start` 开始录音 |
 | `idle` (有输入) | 发送图标 | 调用 `sendMessage()` |
-| `listening` | 停止图标 | 发送 `audio.commit` 提交录音 |
-| `transcribing` | 停止图标 | 发送 `interrupt.request` 打断 |
-| `thinking` | 停止图标 | 发送 `interrupt.request` 打断 |
+| `listening` | 停止图标 | 发送 `audio.commit.manual` 提交录音 |
+| `transcribing` | loading 图标 | 发送 `interrupt.request` 打断 |
+| `thinking` | loading 图标 | 发送 `interrupt.request` 打断 |
 | `speaking` | 停止图标 | 发送 `interrupt.request` 打断 |
 
 ## ASR 转写显示
 
 组件订阅 `voiceActor` 状态变化，当收到 `asr.partial` 或 `asr.final` 事件时：
 
-1. **transcribing/thinking 状态**：显示 `partialTranscript`（实时部分结果）
-2. **thinking/listening/idle 状态**：显示最终 `transcript`
+1. **listening/transcribing/thinking 状态**：显示 `partialTranscript`（实时部分结果）
+2. **listening/idle 状态**：显示最终 `transcript`
+
+**注意**：listening 状态也会显示实时 ASR 文字，用户可以在录音过程中看到识别结果。录音期间 `partialTranscript` 优先于 `transcript`；停止录音后若 `asr.final` 为空但 `partialTranscript` 有内容，后端会降级使用 partial 继续 LLM 流程，前端不会显示 "未识别文字"。
 
 ## 录音可视化
 
@@ -56,6 +58,8 @@ InputBar
 
 - **level = 0**：显示 4 个水平点（无声）
 - **level > 0**：正弦波动画，4 个点相位偏移产生波浪效果
+
+音频回调仅在**首次进入 listening 状态时设置一次**，避免每次 snapshot 更新都重复注册，减少不必要的 console 噪音。
 
 ## 事件绑定
 

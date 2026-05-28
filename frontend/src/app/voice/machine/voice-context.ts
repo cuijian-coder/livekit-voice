@@ -1,6 +1,8 @@
 export interface VoiceContext {
   transcript: string;
   partialTranscript: string;
+  completedSentences: string[];
+  receivedSentenceIds: number[];
   streamBuffer: string;
   sessionId: string;
   turnId: string;
@@ -17,6 +19,8 @@ export function createInitialContext(): VoiceContext {
   return {
     transcript: '',
     partialTranscript: '',
+    completedSentences: [],
+    receivedSentenceIds: [],
     streamBuffer: '',
     sessionId: generateSessionId(),
     turnId: '',

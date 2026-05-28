@@ -1,6 +1,13 @@
 import WebSocket from 'ws'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { getConfig } from '../../infra/config/config.js'
 import type { Logger } from 'pino'
+
+function createProxyAgent(): HttpsProxyAgent | undefined {
+  const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY
+  if (!proxyUrl) return undefined
+  return new HttpsProxyAgent(proxyUrl)
+}
 
 export interface TtsWorker {
   stream(text: string, signal: AbortSignal, logger?: Logger): AsyncIterable<Buffer>
@@ -37,7 +44,7 @@ export class AliyunStreamingTtsWorker implements TtsWorker {
 
     logger?.debug({ wsUrl, voice, format, sampleRate, taskId }, 'aliyun.tts.connecting')
 
-    const ws = new WebSocket(wsUrl)
+    const ws = new WebSocket(wsUrl, { agent: createProxyAgent() })
     ws.binaryType = 'arraybuffer'
 
     let synthesisStarted = false
@@ -169,6 +176,13 @@ export class AliyunStreamingTtsWorker implements TtsWorker {
             } else if (eventName === 'SynthesisCompleted' && status === 20000000) {
               logger?.debug({}, 'aliyun.tts.synthesis_completed')
               synthesisCompleted = true
+              // Wake up waitForBinary() so the while loop exits immediately
+              // instead of hanging until the 15s timeout fires.
+              if (messageResolver) {
+                const resolver = messageResolver
+                messageResolver = null
+                resolver(Buffer.alloc(0))
+              }
             } else if (eventName === 'TaskFailed') {
               logger?.error({ status, message: body.header?.status_message }, 'aliyun.tts.task_failed')
               clearTimeout(timeout)

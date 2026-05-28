@@ -120,15 +120,16 @@ describe('InputBar', () => {
 
   afterEach(() => {
     ;(globalThis as any).document = originalDocument
-    vi.restoreAllMocks()
+    vi.clearAllMocks()
   })
 
-  function makeSnapshot(state: string, partialTranscript = '', transcript = '') {
+  function makeSnapshot(state: string, partialTranscript = '', transcript = '', completedSentences: string[] = []) {
     return {
       value: state,
       context: {
         partialTranscript,
         transcript,
+        completedSentences,
         turnId: 'test-turn',
       },
     }
@@ -162,20 +163,20 @@ describe('InputBar', () => {
     expect(mockTextarea.value).toBe('思考结果')
   })
 
-  it('should display final transcript in idle state', () => {
-    setSnapshot(makeSnapshot('idle', '', '最终结果'))
+  it('should display completed sentences in idle state', () => {
+    setSnapshot(makeSnapshot('idle', '', '最终结果', ['最终结果']))
     new InputBar()
 
-    triggerSubscribe(makeSnapshot('idle', '', '最终结果'))
+    triggerSubscribe(makeSnapshot('idle', '', '最终结果', ['最终结果']))
 
     expect(mockTextarea.value).toBe('最终结果')
   })
 
-  it('should display final transcript in listening state when there is a final result', () => {
-    setSnapshot(makeSnapshot('listening', '', '已确认'))
+  it('should display completed sentences in listening state', () => {
+    setSnapshot(makeSnapshot('listening', '', '已确认', ['已确认']))
     new InputBar()
 
-    triggerSubscribe(makeSnapshot('listening', '', '已确认'))
+    triggerSubscribe(makeSnapshot('listening', '', '已确认', ['已确认']))
 
     expect(mockTextarea.value).toBe('已确认')
   })
@@ -190,14 +191,13 @@ describe('InputBar', () => {
     expect(mockTextarea.value).toBe('user typed')
   })
 
-  it('should show final over partial in listening when both exist (current behavior)', () => {
-    setSnapshot(makeSnapshot('listening', 'partial', 'final'))
+  it('should show completed sentences and partial together in listening', () => {
+    setSnapshot(makeSnapshot('listening', 'partial', 'final', ['final']))
     new InputBar()
 
-    triggerSubscribe(makeSnapshot('listening', 'partial', 'final'))
+    triggerSubscribe(makeSnapshot('listening', 'partial', 'final', ['final']))
 
-    // Note: final transcript overwrites partial in listening state.
-    // This preserves legacy behavior; changing it is a separate UX decision.
-    expect(mockTextarea.value).toBe('final')
+    // completedSentences 和 partialTranscript 同时显示
+    expect(mockTextarea.value).toBe('finalpartial')
   })
 })

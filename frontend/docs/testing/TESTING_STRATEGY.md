@@ -7,15 +7,15 @@
 ## 测试金字塔
 
 ```
-          ┌─────────────────────────────────────┐
-          │     E2E Tests (Browser Manual)      │  ← 手动测试
-          ├─────────────────────────────────────┤
-          │       Integration Tests             │  ← XState Actor
-          ├─────────────────────────────────────┤
-          │         Unit Tests                  │  ← Vitest
-          ├─────────────────────────────────────┤
-          │          Lint + TypeCheck           │  ← CI
-          └─────────────────────────────────────┘
+           ┌─────────────────────────────────────┐
+           │  Integration Tests (Real Backend)   │  ← Playwright + 真实 API
+           ├─────────────────────────────────────┤
+           │     E2E Tests (Mock Backend)        │  ← Playwright
+           ├─────────────────────────────────────┤
+           │         Unit Tests                  │  ← Vitest
+           ├─────────────────────────────────────┤
+           │          Lint + TypeCheck           │  ← CI
+           └─────────────────────────────────────┘
 ```
 
 ## 测试框架
@@ -26,7 +26,7 @@
 
 ## 测试覆盖
 
-### 当前覆盖
+### 当前覆盖 (Frontend)
 
 | 模块 | 测试文件 | 测试数 | 状态 |
 |------|----------|--------|------|
@@ -37,9 +37,25 @@
 | Voice Machine | voice-context.test.ts, voice-events.test.ts, voice-machine.test.ts | 54 | ✅ |
 | Selectors | actionButton.selector.test.ts, voiceStatus.selector.test.ts, capability.selector.test.ts, animation.selector.test.ts | 40 | ✅ |
 | Utils | id.test.ts, time.test.ts | 16 | ✅ |
-| **总计** | **16 个文件** | **186** | **100% 通过** |
+| InputBar | InputBar.test.ts | 7 | ✅ |
+| PCM Pipeline | pcm-pipeline.test.ts | 6 | ✅ |
+| Binary Transport | binary-transport.test.ts | 5 | ✅ |
+| **前端总计** | **20 个文件** | **204** | **100% 通过** |
 
-### 目录结构
+### 当前覆盖 (Backend)
+
+| 模块 | 测试文件 | 测试数 | 状态 |
+|------|----------|--------|------|
+| 各模块 | 4 个测试文件 | 41 | ✅ |
+
+### E2E / 集成测试
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| Mock E2E | 27 | Playwright + Mock WebSocket 服务器 |
+| Integration | 1 | Playwright + 真实后端 (ASR+LLM+TTS) |
+
+### 目录结构 (Frontend)
 
 ```
 src/app/
@@ -52,12 +68,15 @@ src/app/
 │       ├── validation.test.ts    # 22 tests
 │       └── timeline.test.ts      # 10 tests
 ├── runtime/audio/
-│   └── speech-detector.test.ts   # 17 tests (新增)
+│   ├── speech-detector.test.ts   # 17 tests
+│   └── pcm-pipeline.test.ts      # 6 tests (新增)
+├── runtime/transport/
+│   └── binary-transport.test.ts  # 5 tests (新增)
 ├── voice/
 │   ├── machine/
 │   │   ├── voice-context.test.ts
 │   │   ├── voice-events.test.ts
-│   │   └── voice-machine.test.ts  # 26 tests (新增连续对话测试)
+│   │   └── voice-machine.test.ts  # 26 tests
 │   └── selectors/
 │       ├── actionButton.selector.test.ts   # 10 tests
 │       ├── voiceStatus.selector.test.ts    # 6 tests
@@ -65,6 +84,8 @@ src/app/
 │       └── animation.selector.test.ts      # 6 tests
 ├── services/
 │   └── streaming.test.ts        # 6 tests
+├── components/
+│   └── InputBar.test.ts           # 7 tests (新增)
 └── utils/
     ├── id.test.ts               # 6 tests
     └── time.test.ts             # 10 tests
@@ -215,7 +236,9 @@ describe('ModuleName', () => {
 
 ## 未来计划
 
-- [ ] 集成测试 (voiceActor 完整流程)
-- [ ] E2E 测试 (Playwright)
+- [x] 集成测试 (Playwright + 真实后端 API)
+- [x] E2E 测试 (Playwright + Mock WebSocket)
+- [x] UI 组件测试 (InputBar)
 - [ ] Mock Providers (用于无网络测试)
 - [ ] 覆盖率报告
+- [ ] 更多集成场景 (打断、多 turn、网络闪断)

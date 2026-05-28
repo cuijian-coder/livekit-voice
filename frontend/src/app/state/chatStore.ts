@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatState } from '../types/chat';
+import type { ChatMessage, ChatState, MessageRole } from '../types/chat';
 import { generateId } from '../utils/id';
 import { getLogger } from '@livekit-voice/shared/logger';
 
@@ -29,7 +29,7 @@ class ChatStore {
     this.listeners.forEach((l) => l(this.state));
   }
 
-  addMessage(role: 'user' | 'assistant' | 'system', content: string): ChatMessage {
+  addMessage(role: MessageRole, content: string): ChatMessage {
     const message: ChatMessage = {
       id: generateId(),
       role,

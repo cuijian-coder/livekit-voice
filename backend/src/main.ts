@@ -2,6 +2,10 @@ import pino from 'pino'
 import { startServer } from './app.js'
 import { getConfig } from './infra/config/config.js'
 
+// Configure undici to use HTTP_PROXY/HTTPS_PROXY for all fetch() calls
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici'
+setGlobalDispatcher(new EnvHttpProxyAgent())
+
 async function main() {
   const config = getConfig()
   const logger = pino({ level: config.LOG_LEVEL })

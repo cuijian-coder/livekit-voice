@@ -24,25 +24,23 @@ const wave = Math.sin(normalized * Math.PI * 2 + phase * Math.PI * 2)
 
 **后续**: 如需 barge-in 等功能，需要重新设计为 parallel states
 
-### 3. 音频数据未发送到后端
+### 3. 音频数据未发送到后端 ✅ 已修复
 
 **问题描述**: MediaRecorder 录制的数据只存在于内存中
 
-**当前状态**: 仅用于触发状态转换，无实际音频流转
+**修复状态**: 前端通过 WebSocket 发送 binary PCM 帧，后端实时接收并送入 ASR
 
-**需要**: 接入 backend WebSocket 服务
-
-### 4. 流式响应未完整实现
+### 4. 流式响应未完整实现 ✅ 已修复
 
 **问题描述**: mockAI 有流式响应实现，但前端未处理 llm.token 事件
 
-**需要**: 在 speaking 状态处理 llm.token 事件，更新 UI
+**修复状态**: `message-router.ts` 已处理 `llm.token`，`chatStore` 实时更新消息内容
 
-### 5. TTS 音频播放未实现
+### 5. TTS 音频播放未实现 ✅ 已修复
 
 **问题描述**: 后端会返回 TTS 音频，但前端无播放逻辑
 
-**需要**: 实现 Audio API 播放
+**修复状态**: `ttsPlayback` 已实现，支持流式 chunk 播放和中断
 
 ## 设计限制
 
@@ -57,22 +55,23 @@ const wave = Math.sin(normalized * Math.PI * 2 + phase * Math.PI * 2)
 - 当前仅支持 console 输出
 - 无 Sentry/OpenTelemetry 集成
 
-### 3. 测试覆盖不完整
+### 3. 测试覆盖
 
 - Selectors 已覆盖 ✅
 - Voice Machine 已覆盖 ✅
 - Logger/Diagnostics 已覆盖 ✅
-- **UI 组件未覆盖** (InputBar 等)
-- **集成测试未覆盖**
+- **UI 组件已部分覆盖** (InputBar 单元测试 7 个 ✅)
+- **集成测试已覆盖** (Playwright 集成测试：真实 ASR+LLM+TTS ✅)
+- **Mock E2E 测试已覆盖** (27 个 Playwright 测试 ✅)
 
 ## 技术债
 
-| 项目 | 说明 | 优先级 |
-|------|------|--------|
-| Parallel states | 未来需要支持 barge-in 时重构 | 中 |
-| Audio Playback | TTS 音频播放未实现 | 高 |
-| Streaming UI | llm.token 事件未处理 | 高 |
-| E2E Tests | 无 Playwright 测试 | 低 |
+| 项目 | 说明 | 优先级 | 状态 |
+|------|------|--------|------|
+| Parallel states | 未来需要支持 barge-in 时重构 | 中 | ⏳ |
+| Audio Playback | TTS 音频播放 | 高 | ✅ 已完成 |
+| Streaming UI | llm.token 事件处理 | 高 | ✅ 已完成 |
+| E2E Tests | Playwright 测试 | 低 | ✅ 已完成 |
 
 ## 已验证的正确行为
 

@@ -12,6 +12,23 @@ export default defineConfig({
       '@livekit-voice/shared/logger': resolve(__dirname, '../packages/shared/logger'),
     }
   },
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    allowedHosts: true,
+    strictPort: true,
+    cors: true,
+    hmr: false,
+    fs: {
+      allow: ['..']
+    },
+    proxy: {
+      '/ws': {
+        target: 'ws://localhost:3000',
+        ws: true,
+      }
+    }
+  },
   test: {
     environment: 'node',
     globals: true,

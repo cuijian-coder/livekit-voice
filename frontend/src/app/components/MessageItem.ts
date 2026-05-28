@@ -24,12 +24,22 @@ export class MessageItem {
     }
   }
 
+  private getAvatarText(): string {
+    switch (this.role) {
+      case 'user': return 'U';
+      case 'assistant': return 'A';
+      case 'robot-command': return '🤖';
+      case 'robot': return '⚙️';
+      default: return '?';
+    }
+  }
+
   private render(message: ChatMessage): void {
     // Set message ID on the element for E2E testing
     this.element.setAttribute('data-message-id', message.id);
 
     const avatar = createElement('div', 'message__avatar');
-    avatar.textContent = message.role === 'user' ? 'U' : 'A';
+    avatar.textContent = this.getAvatarText();
 
     const content = createElement('div', 'message__content');
     content.textContent = message.content;

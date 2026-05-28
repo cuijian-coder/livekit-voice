@@ -98,6 +98,8 @@ class VoiceSession {
 
   // 核心方法
   handleAudioChunk(chunk: Buffer): void
+  handleAudioStart(turnId: string): void       // 启动新 turn，自动停止旧 ASR 流
+  handleAudioCommit(turnId: string, finalSeq: number): void  // 提交录音，flush 剩余音频
   handleInterrupt(): void
   handleAsrResult(text: string, isFinal: boolean): void
   handleLlmToken(token: string): void
@@ -211,6 +213,8 @@ Workers 是无状态适配器，仅负责 AI 推理调用。
 
 #### ASR Worker
 
+采用 **100ms batch 发送策略**，前端每 8ms 推一帧 256 字节音频，后端累积到 3200 字节（100ms @ 16kHz 16-bit PCM）后一次性发送给 DashScope，既匹配实时速率又减少 send() 调用次数。
+
 ```typescript
 interface AsrWorker {
   stream(
@@ -241,6 +245,14 @@ interface TtsWorker {
   ): AsyncIterable<Buffer>
 }
 ```
+
+## 多 Turn ASR 保护
+
+为防止连续录音时 ASR 流互相竞争，VoiceSession 在 `handleAudioStart` 时实施三层保护：
+
+1. **无条件停止旧流**：新 `audio.start` 到达时，无论当前状态如何，先 `stopStreamingAsr()` 中止旧流
+2. **Task 引用保护**：旧 ASR 任务结束时检查 `this.asrStreamTask === taskRef`，只有当前任务仍是自己的引用时才清零，防止覆盖新启动的任务
+3. **Controller 闭包化**：`createFrameStream` 接收 `AbortController` 参数，避免依赖可能被并发修改的 `this.asrStreamController`
 
 ## 事件驱动架构
 

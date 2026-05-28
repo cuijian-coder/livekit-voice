@@ -4,6 +4,12 @@ import { voiceActor } from '../voice/providers/voice-provider';
 import { selectActionButton } from '../voice/selectors/actionButton.selector';
 import { getButtonConfig } from '../voice/ui/button-config';
 import { audioRecorder } from '../runtime/audio/recorder';
+import { componentRegistry } from '../runtime/component-registry';
+
+export interface CommandHandler {
+  execute(args: string[]): Promise<{ success: boolean; message: string; error?: string }>;
+  getDisplayText(args: string[]): string;
+}
 
 export class InputBar {
   private element: HTMLElement;
@@ -11,6 +17,7 @@ export class InputBar {
   private actionButton: HTMLButtonElement;
   private isProcessing = false;
   private prevState = '';
+  private commandRegistry = new Map<string, CommandHandler>();
 
   constructor() {
     this.element = createElement('div', 'input-bar');
@@ -19,6 +26,9 @@ export class InputBar {
     this.render();
     this.bindEvents();
     this.updateButton();
+
+    // 自注册到全局组件注册表，供外部模块反向发现
+    componentRegistry.register('inputBar', this);
   }
 
   private render(): void {
@@ -67,18 +77,22 @@ export class InputBar {
       })
     }
 
-    // Update transcript on every snapshot change (asr.partial arrives within listening state)
-    if (isRecording || isTranscribing || state === 'thinking') {
-      const partialTranscript = snapshot.context.partialTranscript
-      if (partialTranscript) {
-        this.textarea.value = partialTranscript
-      }
+    // Clear textarea when entering thinking state (start of LLM inference)
+    if (state === 'thinking' && this.prevState !== 'thinking') {
+      this.textarea.value = ''
     }
 
-    // Show final transcript in listening/idle
-    const finalTranscript = snapshot.context.transcript
-    if (finalTranscript && (state === 'listening' || state === 'idle')) {
-      this.textarea.value = finalTranscript
+    // Update transcript display: completedSentences + partialTranscript
+    const statesWithTranscript = ['listening', 'transcribing', 'thinking', 'idle']
+    if (statesWithTranscript.includes(state)) {
+      const sentences = [...snapshot.context.completedSentences]
+      if (snapshot.context.partialTranscript) {
+        sentences.push(snapshot.context.partialTranscript)
+      }
+      const displayText = sentences.join('')
+      if (displayText) {
+        this.textarea.value = displayText
+      }
     }
 
     this.prevState = state
@@ -169,6 +183,18 @@ export class InputBar {
     this.actionButton.disabled = buttonVm.disabled;
   }
 
+  /**
+   * Register a slash command handler.
+   * External modules (e.g., agent) call this to add command support.
+   */
+  registerCommand(prefix: string, handler: CommandHandler): void {
+    this.commandRegistry.set(prefix, handler);
+  }
+
+  unregisterCommand(prefix: string): void {
+    this.commandRegistry.delete(prefix);
+  }
+
   private async sendMessage(): Promise<void> {
     const content = this.textarea.value.trim();
     if (!content || this.isProcessing) return;
@@ -177,9 +203,37 @@ export class InputBar {
     this.textarea.value = '';
     this.textarea.style.height = 'auto';
 
-    chatStore.addMessage('user', content);
+    if (content.startsWith('/')) {
+      const parts = content.slice(1).trim().split(/\s+/);
+      const prefix = parts[0];
+      const args = parts.slice(1);
+      const handler = this.commandRegistry.get(prefix);
 
-    voiceActor.send({ type: 'SUBMIT_TEXT', text: content });
+      if (handler) {
+        // 命中注册的命令
+        const displayText = handler.getDisplayText(args);
+        chatStore.addMessage('robot-command', displayText);
+
+        try {
+          const result = await handler.execute(args);
+          if (result.success) {
+            chatStore.addMessage('robot', `✅ ${result.message || '执行完成'}`);
+          } else {
+            chatStore.addMessage('robot', `❌ 错误: ${result.error || '执行失败'}`);
+          }
+        } catch (err) {
+          chatStore.addMessage('robot', `❌ 错误: ${err instanceof Error ? err.message : '未知错误'}`);
+        }
+      } else {
+        // 未注册命令：作为普通文本发给 LLM
+        chatStore.addMessage('user', content);
+        voiceActor.send({ type: 'SUBMIT_TEXT', text: content });
+      }
+    } else {
+      // 普通文本
+      chatStore.addMessage('user', content);
+      voiceActor.send({ type: 'SUBMIT_TEXT', text: content });
+    }
 
     this.isProcessing = false;
   }

@@ -6,6 +6,10 @@ import { QwenAsrWorker } from '../workers/asr/qwen-asr.worker.js'
 import { QwenLlmWorker } from '../workers/llm/qwen-llm.worker.js'
 import { AliyunStreamingTtsWorker } from '../workers/tts/aliyun-streaming-tts.worker.js'
 
+// Configure undici proxy for integration tests
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici'
+setGlobalDispatcher(new EnvHttpProxyAgent())
+
 describe('Integration: ASR + LLM + TTS Pipeline', () => {
   let config: ReturnType<typeof getConfig>
   let asrWorker: QwenAsrWorker

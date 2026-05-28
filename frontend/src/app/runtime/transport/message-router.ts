@@ -79,9 +79,12 @@ export function createMessageRouter(): {
         }
         voiceActor.send({ type, ...payload } as any)
         break
+      case SERVER_EVENTS.TTS_COMPLETE:
+        ttsPlayback.onComplete()
+        voiceActor.send({ type, ...payload } as any)
+        break
       case SERVER_EVENTS.TTS_STARTED:
       case SERVER_EVENTS.TTS_CHUNK:
-      case SERVER_EVENTS.TTS_COMPLETE:
       case SERVER_EVENTS.PLAYBACK_START:
       case SERVER_EVENTS.PLAYBACK_CHUNK:
       case SERVER_EVENTS.PLAYBACK_STOP:

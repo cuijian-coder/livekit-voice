@@ -1,10 +1,18 @@
 import { WebSocket } from 'ws'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import type { Logger } from 'pino'
 import { getConfig } from '../../infra/config/config.js'
+
+function createProxyAgent(): HttpsProxyAgent | undefined {
+  const proxyUrl = process.env.https_proxy || process.env.HTTPS_PROXY
+  if (!proxyUrl) return undefined
+  return new HttpsProxyAgent(proxyUrl)
+}
 
 export interface AsrResult {
   text: string
   isFinal: boolean
+  sentenceId?: number
 }
 
 export interface AsrWorker {
@@ -60,6 +68,7 @@ export class QwenAsrWorker implements AsrWorker {
           headers: {
             Authorization: `Bearer ${this.config.QWEN_API_KEY}`,
           },
+          agent: createProxyAgent(),
         })
 
         ws.on('open', () => {
@@ -91,10 +100,11 @@ export class QwenAsrWorker implements AsrWorker {
               if (!sentence) return
               const text = sentence.text ?? ''
               const isFinal = sentence.sentence_end === true
+              const sentenceId = sentence.sentence_id ?? undefined
               if (isFinal) {
-                logger?.debug({ text }, 'dashscope.asr.final')
+                logger?.debug({ text, sentenceId }, 'dashscope.asr.final')
               }
-              queueResult({ text, isFinal })
+              queueResult({ text, isFinal, sentenceId })
             } else if (event === 'task-finished') {
               finished = true
               logger?.debug({}, 'dashscope.asr.finished')
