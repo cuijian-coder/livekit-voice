@@ -1,0 +1,20 @@
+{
+  "appId": "com.livekit-voice.app",
+  "productName": "LiveKit Voice Chat",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "electron-dist/**/*"
+  ],
+  "mac": {
+    "target": "dmg"
+  },
+  "win": {
+    "target": "nsis"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+}

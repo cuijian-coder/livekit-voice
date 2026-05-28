@@ -2,6 +2,8 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "description": "LiveKit Voice Chat - Desktop Application",
+  "author": "LiveKit Voice Team",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +14,10 @@
     "format": "prettier --write .",
     "test": "vitest",
     "test:run": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "electron:dev": "pnpm build && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "pnpm build && vite build --config vite.electron.config.ts && electron-builder",
+    "electron:preview": "electron ."
   },
   "dependencies": {
     "@livekit-voice/shared": "workspace:*",
@@ -22,10 +27,15 @@
     "@types/node": "^22.10.7",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "concurrently": "^9.0.0",
+    "electron": "33.4.11",
+    "electron-builder": "^25.0.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
-    "vitest": "^3.0.4"
-  }
+    "vitest": "^3.0.4",
+    "wait-on": "^8.0.0"
+  },
+  "main": "electron-dist/main.js"
 }

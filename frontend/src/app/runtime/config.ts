@@ -1,24 +1,21 @@
 import type { LogLevel } from '@livekit-voice/shared/logger'
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+function getElectronConfig() {
+  const electron = (window as any).electronAPI
+  return electron?.config || null
+}
 
-/**
- * Agent WebSocket endpoint for robot control.
- * Separate from the main voice chat WebSocket.
- */
-export const AGENT_WS_URL = import.meta.env.VITE_AGENT_WS_URL || 'ws://127.0.0.1:7765/ws'
+const ec = typeof window !== 'undefined' ? getElectronConfig() : null
 
-/**
- * Agent feature switch.
- * When enabled, the agent module auto-registers into the app via dynamic import.
- */
-export const AGENT_ENABLED = import.meta.env.VITE_AGENT_ENABLED === 'true'
+export const API_BASE_URL = ec?.backend?.apiUrl
+  || import.meta.env.VITE_API_URL
+  || 'http://localhost:3000'
 
-/**
- * Frontend logging level.
- * debug = everything (very noisy during audio recording)
- * info  = production default (filters pipeline pcm/vad/transport logs)
- * warn  = warnings and errors only
- * error = errors only
- */
+export const AGENT_WS_URL = ec?.agent?.wsUrl
+  || import.meta.env.VITE_AGENT_WS_URL
+  || 'ws://127.0.0.1:7765/ws'
+
+export const AGENT_ENABLED = ec?.agent?.enabled
+  ?? (import.meta.env.VITE_AGENT_ENABLED === 'true')
+
 export const LOG_LEVEL: LogLevel = (import.meta.env.VITE_LOG_LEVEL as LogLevel) || 'info'

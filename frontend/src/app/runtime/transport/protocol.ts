@@ -6,6 +6,13 @@ export type { ClientEventName, ServerEventName }
 
 function resolveDefaultWsUrl(): string {
   if (typeof window !== 'undefined') {
+    // Electron 环境：优先使用主进程注入的配置
+    const electron = (window as any).electronAPI
+    if (electron?.config?.backend?.wsUrl) {
+      return electron.config.backend.wsUrl
+    }
+
+    // 浏览器环境：自适应当前域名
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${protocol}//${window.location.host}/ws`
   }
