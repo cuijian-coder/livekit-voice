@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import type { AppConfig } from './config'
+import type { AppConfig } from '../../shared/electron-api'
 
 const defaultConfig: AppConfig = {
   backend: {
@@ -23,7 +23,6 @@ export function loadConfig(): AppConfig {
   const configPath = getConfigPath()
 
   if (!existsSync(configPath)) {
-    // 首次启动：自动创建默认配置
     const dir = join(configPath, '..')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8')
@@ -33,7 +32,6 @@ export function loadConfig(): AppConfig {
   try {
     const raw = readFileSync(configPath, 'utf-8')
     const parsed = JSON.parse(raw) as AppConfig
-    // 简单校验：确保必需字段存在
     if (!parsed.backend?.wsUrl || !parsed.backend?.apiUrl) {
       return { ...defaultConfig }
     }

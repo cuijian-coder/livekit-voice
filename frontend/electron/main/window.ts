@@ -1,12 +1,12 @@
-import { app, BrowserWindow } from 'electron'
+import { BrowserWindow } from 'electron'
 import { join } from 'path'
 
-const createWindow = () => {
+export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     webPreferences: {
-      preload: join(__dirname, '../electron-dist/preload.js'),
+      preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -18,10 +18,6 @@ const createWindow = () => {
   } else {
     win.loadFile(join(__dirname, '../dist/index.html'))
   }
+
+  return win
 }
-
-app.whenReady().then(createWindow)
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
-})

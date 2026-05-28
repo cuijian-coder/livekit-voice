@@ -37,5 +37,5 @@
     "vitest": "^3.0.4",
     "wait-on": "^8.0.0"
   },
-  "main": "electron-dist/main.js"
+  "main": "electron-dist/main.cjs"
 }

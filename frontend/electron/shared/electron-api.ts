@@ -1,6 +1,3 @@
-/**
- * AppConfig - Electron 运行时配置类型
- */
 export interface AppConfig {
   backend: {
     wsUrl: string
@@ -15,10 +12,4 @@ export interface AppConfig {
 export interface ElectronAPI {
   config: AppConfig
   platform: string
-}
-
-declare global {
-  interface Window {
-    electronAPI: ElectronAPI
-  }
 }
