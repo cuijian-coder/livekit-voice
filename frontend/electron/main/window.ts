@@ -12,6 +12,10 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
+  win.webContents.openDevTools({
+    mode: 'detach'
+  })
+
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL)
     win.webContents.openDevTools()

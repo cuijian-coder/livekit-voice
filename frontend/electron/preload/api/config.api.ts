@@ -1,12 +1,19 @@
 import { contextBridge } from 'electron'
-import { loadConfig } from '../../main/services/config.service'
-import type { ElectronAPI } from '../../shared/electron-api'
 
-export function exposeConfigApi(): void {
-  const api: ElectronAPI = {
-    config: loadConfig(),
-    platform: process.platform,
+const config = {
+  backend: {
+    wsUrl: 'ws://localhost:3000/ws',
+    apiUrl: 'http://localhost:3000',
   }
+}
 
-  contextBridge.exposeInMainWorld('electronAPI', api)
+export function exposeConfigApi() {
+
+  contextBridge.exposeInMainWorld(
+    'electronAPI',
+    {
+      config,
+      platform: process.platform,
+    }
+  )
 }

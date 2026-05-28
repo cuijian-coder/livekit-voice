@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import { resolve } from 'path'
 
 export default defineConfig({
+  base: './',
+  
   resolve: {
     alias: {
       '@livekit-voice/shared': resolve(__dirname, '../packages/shared'),

@@ -1,7 +1,9 @@
 import { app } from 'electron'
 import { createMainWindow } from './window'
+import { registerPermissionHandlers } from './permissions'
 
 app.whenReady().then(() => {
+  registerPermissionHandlers()
   createMainWindow()
 })
 

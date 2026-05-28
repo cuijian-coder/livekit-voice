@@ -5,6 +5,38 @@ import { speechDetector } from './speech-detector'
 
 const logger = getLogger()
 
+/**
+ * AudioWorklet processor code inlined as string.
+ * Loaded via Blob URL to avoid file-path issues in Electron (file:// protocol).
+ */
+const PCM_CAPTURE_WORKLET_CODE = `
+class PcmCaptureProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super()
+    this.currentSeq = 0
+    this.port.onmessage = (event) => {
+      if (event.data.type === 'reset') {
+        this.currentSeq = 0
+      }
+    }
+  }
+
+  process(inputs, outputs, parameters) {
+    const input = inputs[0]
+    if (!input || !input[0]) return true
+    const channelData = input[0]
+    this.port.postMessage({
+      type: 'pcm',
+      seq: this.currentSeq++,
+      data: channelData
+    })
+    return true
+  }
+}
+
+registerProcessor('pcm-capture-processor', PcmCaptureProcessor)
+`
+
 export type AudioLevelCallback = (level: number) => void
 
 export class AudioRecorder {
@@ -51,12 +83,12 @@ export class AudioRecorder {
 
       this.audioContext = new AudioContext({ sampleRate: 16000 })
 
-      logger.info('audio.worklet.loading', { url: new URL('./pcm-capture-processor.ts', import.meta.url).href })
+      logger.info('audio.worklet.loading')
       
       try {
-        await this.audioContext.audioWorklet.addModule(
-          new URL('./pcm-capture-processor.ts', import.meta.url).href
-        )
+        const blob = new Blob([PCM_CAPTURE_WORKLET_CODE], { type: 'application/javascript' })
+        const blobUrl = URL.createObjectURL(blob)
+        await this.audioContext.audioWorklet.addModule(blobUrl)
         logger.info('audio.worklet.loaded')
       } catch (err) {
         logger.error('audio.worklet.load.failed', { err })
@@ -126,7 +158,6 @@ export class AudioRecorder {
   }
 
   async flush(): Promise<void> {
-    // Wait for pending worklet frames to be delivered (~50ms)
     await new Promise(resolve => setTimeout(resolve, 50))
     logger.debug('audio.recording.flush.done')
   }
