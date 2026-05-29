@@ -4,17 +4,14 @@ import { resolve } from 'path'
 export default defineConfig({
   build: {
     lib: {
-      entry: {
-        main: resolve(__dirname, 'electron/main/main.ts'),
-        preload: resolve(__dirname, 'electron/preload/preload.ts'),
-      },
+      entry: resolve(__dirname, 'electron/main/main.ts'),
       formats: ['cjs'],
-      fileName: (_format, entryName) => `${entryName}.cjs`,
+      fileName: () => 'main.cjs',
     },
     outDir: 'electron-dist',
     emptyOutDir: true,
     rollupOptions: {
-      external: ['electron', 'fs', 'path'],
+      external: ['electron', 'path'],
     },
   },
 })

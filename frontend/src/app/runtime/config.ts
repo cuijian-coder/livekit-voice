@@ -1,21 +1,10 @@
 import type { LogLevel } from '@livekit-voice/shared/logger'
+import config from '../../config.json'
 
-function getElectronConfig() {
-  const electron = (window as any).electronAPI
-  return electron?.config || null
-}
+export const API_BASE_URL = config.backend.apiUrl
 
-const ec = typeof window !== 'undefined' ? getElectronConfig() : null
+export const AGENT_WS_URL = config.agent.wsUrl
 
-export const API_BASE_URL = ec?.backend?.apiUrl
-  || import.meta.env.VITE_API_URL
-  || 'http://localhost:3000'
+export const AGENT_ENABLED = config.agent.enabled
 
-export const AGENT_WS_URL = ec?.agent?.wsUrl
-  || import.meta.env.VITE_AGENT_WS_URL
-  || 'ws://127.0.0.1:7765/ws'
-
-export const AGENT_ENABLED = ec?.agent?.enabled
-  ?? (import.meta.env.VITE_AGENT_ENABLED === 'true')
-
-export const LOG_LEVEL: LogLevel = (import.meta.env.VITE_LOG_LEVEL as LogLevel) || 'info'
+export const LOG_LEVEL: LogLevel = config.logLevel as LogLevel

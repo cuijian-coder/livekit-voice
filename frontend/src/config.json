@@ -1,0 +1,11 @@
+{
+  "backend": {
+    "wsUrl": "ws://localhost:3000/ws",
+    "apiUrl": "http://localhost:3000"
+  },
+  "agent": {
+    "wsUrl": "ws://127.0.0.1:7765/ws",
+    "enabled": false
+  },
+  "logLevel": "info"
+}

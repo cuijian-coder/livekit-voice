@@ -6,7 +6,8 @@
   },
   "files": [
     "dist/**/*",
-    "electron-dist/**/*"
+    "electron-dist/**/*",
+    "src/config.json"
   ],
   "mac": {
     "target": "dmg"
